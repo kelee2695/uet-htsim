@@ -23,6 +23,8 @@ def run_experiments(input_filename):
         elif (filename.startswith("!")):
             print ("Found parameters when not processing a file!",filename)
             continue;
+        elif (len(filename) == 0):
+            continue;
 
         experiment_name = ""
         targetTailFCT = 0

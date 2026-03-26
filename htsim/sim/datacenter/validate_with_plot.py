@@ -7,12 +7,12 @@ import subprocess
 import sys
 import os
 do_process = True
-save_file = False
+save_file = True
+output_dir = './figures/'
 
 if save_file:
-    outpu_dir = './figures/'
-    if not os.path.exists(outpu_dir):
-        os.makedirs(outpu_dir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 def run_experiments(input_filename):
     # Read the filenames from the input file
     with open(input_filename, 'r') as file:
@@ -61,6 +61,9 @@ def run_experiments(input_filename):
             if ("Param" in p):
                 params.append(p.split(" ",1)[1])
                 #print ("Found param",p.split(" ",1)[1])
+            elif ("Binary" in p):
+                binary = (p.split(" ",1)[1]).rstrip()
+                print ("Using binary:", binary)
             elif ("tailFCT" in p):
                 targetTailFCT = int(p.split(" ",1)[1])
                 #print ("Found targetTailFCT",targetTailFCT)
@@ -168,10 +171,12 @@ def run_experiments(input_filename):
 
             print ("Summary:",x.decode('utf-8'))
             if do_process:
-                subprocess.call("parse_output " + 'logout.dat' + " -ascii > " + "./datacenter/logs/test.asc", shell=True)#+filename.split('/')[-1].split('.')[0]+".asc"
+                # subprocess.call("parse_output " + 'logout.dat' + " -ascii > " + "./datacenter/logs/test.asc", shell=True)#+filename.split('/')[-1].split('.')[0]+".asc"
+                pass  # parse_output command not available, skipping
         else:
             # Print any errors that occurred
             print("Error processing file ",filename,errors.decode())
+            continue  # Skip to next experiment if this one failed
   
         throughputs_mbps = throughputs 
         #Calculate the CDF
@@ -189,7 +194,7 @@ def run_experiments(input_filename):
             plt.ylabel('CDF')
             plt.legend()
             plt.grid(True)
-            full_path = os.path.join(outpu_dir, 'fcts.png')
+            full_path = os.path.join(output_dir, 'fcts.png')
             if save_file:
                 plt.savefig(full_path,format='png')
             else:
@@ -209,7 +214,7 @@ def run_experiments(input_filename):
     plt.title('New Packets ')
     plt.xlabel('Experiments')
     plt.ylabel('# PKTs')
-    full_path = os.path.join(outpu_dir, 'new_pkts.png')
+    full_path = os.path.join(output_dir, 'new_pkts.png')
     if save_file:
         plt.savefig(full_path,format='png')
     else:
@@ -223,7 +228,7 @@ def run_experiments(input_filename):
     plt.title('Total Rtx Packets ')
     plt.xlabel('Experiments')
     plt.ylabel('# Rtxs')
-    full_path = os.path.join(outpu_dir, 'Rtx.png')
+    full_path = os.path.join(output_dir, 'Rtx.png')
     if save_file:
         plt.savefig(full_path,format='png')
     else:
@@ -236,7 +241,7 @@ def run_experiments(input_filename):
     plt.title('Rts Packets ')
     plt.xlabel('Experiments')
     plt.ylabel('# Rts')
-    full_path = os.path.join(outpu_dir, 'Rts.png')
+    full_path = os.path.join(output_dir, 'Rts.png')
     if save_file:
         plt.savefig(full_path,format='png')
     else:
@@ -249,7 +254,7 @@ def run_experiments(input_filename):
     plt.title('Acks ')
     plt.xlabel('Experiment')
     plt.ylabel('# Acks')
-    full_path = os.path.join(outpu_dir, 'acks.png')
+    full_path = os.path.join(output_dir, 'acks.png')
     if save_file:
         plt.savefig(full_path,format='png')
     else:
