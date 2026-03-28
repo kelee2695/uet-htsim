@@ -19,6 +19,8 @@
 #include "uec_mp.h"
 #include "uec_pdcses.h"
 #include "compositequeue.h"
+#include "queue_lossless_input.h"
+#include "queue_lossless_output.h"
 #include "topology.h"
 #include "connection_matrix.h"
 #include "pciemodel.h"
@@ -44,7 +46,7 @@ uint32_t DEFAULT_NONTRIMMING_QUEUESIZE_FACTOR = 5;
 EventList eventlist;
 
 void exit_error(char* progr) {
-    cout << "Usage " << progr << " [-nodes N]\n\t[-cwnd cwnd_size]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (single,rand,perm,pull,ecmp,\n\tecmp_host path_count,ecmp_ar,ecmp_rr,\n\tecmp_host_ar ar_thresh)]\n\t[-log log_level]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-target_q_delay x] target_queuing_delay in us, default is 6us \n\t[-switch_latency x] switching latency in us, default 0\n\t[-host_queue_type  swift|prio|fair_prio]\n\t[-logtime dt] sample time for sinklogger, etc\n\t[-conn_reuse] enable connection reuse" << endl;
+    cout << "Usage " << progr << " [-nodes N]\n\t[-cwnd cwnd_size]\n\t[-q queue_size]\n\t[-queue_type composite|composite_ecn|lossless|lossless_input|aeolus|aeolus_ecn]\n\t[-pfc_thresholds low high] set PFC thresholds for lossless queues (default: 12 15)\n\t[-lossless_ecn threshold] enable ECN for lossless_input queues\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (single,rand,perm,pull,ecmp,\n\tecmp_host path_count,ecmp_ar,ecmp_rr,\n\tecmp_host_ar ar_thresh)]\n\t[-log log_level]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-target_q_delay x] target_queuing_delay in us, default is 6us \n\t[-switch_latency x] switching latency in us, default 0\n\t[-host_queue_type  swift|prio|fair_prio]\n\t[-logtime dt] sample time for sinklogger, etc\n\t[-conn_reuse] enable connection reuse" << endl;
     exit(1);
 }
 
@@ -84,6 +86,11 @@ int main(int argc, char **argv) {
     simtime_picosec hop_latency = timeFromUs((uint32_t)1);
     simtime_picosec switch_latency = timeFromUs((uint32_t)0);
     queue_type qt = COMPOSITE;
+    
+    uint64_t high_pfc = 15, low_pfc = 12;
+
+    bool enable_lossless_ecn = false;
+    int lossless_ecn_threshold = 0;
 
     enum LoadBalancing_Algo { BITMAP, REPS, REPS_LEGACY, OBLIVIOUS, MIXED};
     LoadBalancing_Algo load_balancing_algo = MIXED;
@@ -245,6 +252,12 @@ int main(int argc, char **argv) {
             else if (!strcmp(argv[i+1], "composite_ecn")) {
                 qt = COMPOSITE_ECN;
             }
+            else if (!strcmp(argv[i+1], "lossless")) {
+                qt = LOSSLESS;
+            }
+            else if (!strcmp(argv[i+1], "lossless_input")) {
+                qt = LOSSLESS_INPUT;
+            }
             else if (!strcmp(argv[i+1], "aeolus")){
                 qt = AEOLUS;
             }
@@ -303,6 +316,16 @@ int main(int argc, char **argv) {
             } else {
                 exit_error(argv[0]);
             }
+            i++;
+        } else if (!strcmp(argv[i],"-pfc_thresholds")){
+            low_pfc = atoi(argv[i+1]);
+            high_pfc = atoi(argv[i+2]);
+            cout << "PFC thresholds high " << high_pfc << " low " << low_pfc << endl;
+            i+=2;
+        } else if (!strcmp(argv[i],"-lossless_ecn")){
+            enable_lossless_ecn = true;
+            lossless_ecn_threshold = atoi(argv[i+1]);
+            cout << "Lossless ECN enabled with threshold " << lossless_ecn_threshold << " packets" << endl;
             i++;
         } else if (!strcmp(argv[i],"-cwnd")) {
             cwnd = atoi(argv[i+1]);
@@ -527,6 +550,18 @@ int main(int argc, char **argv) {
     cout << "Parsed args\n";
     Packet::set_packet_size(packet_size);
 
+    // Initialize lossless queue thresholds
+    if (qt == LOSSLESS || qt == LOSSLESS_INPUT) {
+        LosslessInputQueue::_high_threshold = Packet::data_packet_size()*high_pfc;
+        LosslessInputQueue::_low_threshold = Packet::data_packet_size()*low_pfc;
+        cout << "Lossless queue enabled with PFC thresholds: high=" 
+             << high_pfc << " packets, low=" << low_pfc << " packets" << endl;
+        if (enable_lossless_ecn) {
+            LosslessOutputQueue::_ecn_enabled = true;
+            LosslessOutputQueue::_K = lossless_ecn_threshold * Packet::data_packet_size();
+            cout << "Lossless ECN enabled with K=" << lossless_ecn_threshold << " packets" << endl;
+        }
+    }
 
     UecSrc::_mtu = Packet::data_packet_size();
     UecSrc::_mss = UecSrc::_mtu - UecSrc::_hdr_size;

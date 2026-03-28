@@ -6,7 +6,8 @@
 #include "network.h"
 
 
-#define HOST_NIC 100000 // host nic speed in Mbps
+// #define HOST_NIC 100000 // host nic speed in Mbps
+#define HOST_NIC 400000 // host nic speed in Mbps
 #define CORE_TO_HOST 4
 
 //basic setup!
