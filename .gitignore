@@ -4,7 +4,7 @@ parse_output
 htsim_*
 *.dat
 *.csv
-*.json
+# *.json
 idmap.txt
 *_test
 *.out
@@ -14,5 +14,6 @@ idmap.txt
 *.png
 !example_validate.json
 build/
-test_hw/
+# test_hw/2spine_4leaf_256/
+result_*
 test/
