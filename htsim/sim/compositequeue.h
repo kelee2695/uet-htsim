@@ -55,6 +55,8 @@ class CompositeQueue : public Queue {
             cout << "queue_id " << _queue_id << " ecn_low " << _ecn_minthresh << " ecn_high " << _ecn_maxthresh << endl;
     }
 
+    void set_ecn_tag(int ecn_tag) { _ecn_tag = ecn_tag; }
+
     int _num_packets;
     int _num_headers; // only includes data packets stripped to headers, not acks or nacks
     int _num_acks;
@@ -79,6 +81,7 @@ class CompositeQueue : public Queue {
     // marking.
     mem_b _ecn_minthresh; 
     mem_b _ecn_maxthresh;
+    int _ecn_tag;
 
     uint16_t _trim_size;
 

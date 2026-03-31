@@ -191,7 +191,7 @@ class UecAckPacket : public UecBasePacket {
 public:
     inline static UecAckPacket* newpkt(PacketFlow &flow, const Route *route, 
                                         seq_t cumulative_ack, seq_t ref_ack, seq_t acked_psn,/*pull_quanta pullno,*/
-                                        uint16_t path_id, bool ecn_marked, uint64_t recv_bytes, uint8_t rcv_wnd_pen,
+                                        uint16_t path_id, int ecn_marked, uint64_t recv_bytes, uint8_t rcv_wnd_pen,
                                         uint32_t destination = UINT32_MAX) {
         UecAckPacket* p = _packetdb.allocPacket();
         p->set_attrs(flow, ACKSIZE, 0);
@@ -236,7 +236,7 @@ public:
     inline void set_bitmap(uint64_t bitmap){_sack_bitmap = bitmap;};
     /* inline pull_quanta pullno() const {return _pullno;}*/
     uint16_t  ev() const {return _ev;}
-    inline bool ecn_echo() const {return _ecn_echo;}
+    inline int ecn_echo() const {return _ecn_echo;}
     uint64_t bitmap() const {return _sack_bitmap;}
     virtual PktPriority priority() const {return Packet::PRIO_HI;}
     
@@ -261,7 +261,7 @@ protected:
     uint8_t _rcv_cwnd_pen;
 
     bool _rnr;
-    bool _ecn_echo;
+    int _ecn_echo;
     bool _rtx_echo;
     bool _is_rts = false;
     simtime_picosec _residency_time;
@@ -311,8 +311,8 @@ public:
     inline seq_t ref_ack() const {return _ref_epsn;}
     //inline pull_quanta pullno() const {return _pullno;}
     uint16_t ev() const {return _ev;}
-    inline void set_ecn_echo(bool ecn_echo) {_ecn_echo = ecn_echo;}
-    inline bool ecn_echo() const {return _ecn_echo;}
+    inline void set_ecn_echo(int ecn_echo) {_ecn_echo = ecn_echo;}
+    inline int ecn_echo() const {return _ecn_echo;}
     inline uint64_t recvd_bytes() const {return _recvd_bytes;}
     inline uint64_t target_bytes() const {return _target_bytes;}
 
@@ -331,7 +331,7 @@ protected:
     bool _last_hop;
 
     bool _rnr;
-    bool _ecn_echo;
+    int _ecn_echo;
     static PacketDB<UecNackPacket> _packetdb;
 };
 

@@ -1192,6 +1192,9 @@ FatTreeTopology::alloc_queue(QueueLogger* queueLogger, linkspeed_bps speed, cons
                         else
                             q->set_ecn_thresholds(_cfg->_ecn_low, _cfg->_ecn_high);
                 }
+                if (tor && dir == DOWNLINK) {
+                    q->set_ecn_tag(ECN_CF);
+                }
             }
             return q;
         }

@@ -27,6 +27,7 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
     _num_bounced = 0;
     _ecn_minthresh = maxsize*2; // don't set ECN by default
     _ecn_maxthresh = maxsize*2; // don't set ECN by default
+    _ecn_tag = ECN_CE;
 
     _return_to_sender = false;
 
@@ -94,7 +95,7 @@ void CompositeQueue::completeService(){
         bool ecn = decide_ECN();
         //ECN mark on deque
         if (ecn) {
-            pkt->set_flags(pkt->flags() | ECN_CE);
+            pkt->set_flags(pkt->flags() | _ecn_tag);
         }
         if (_queue_id == DEBUG_QUEUE_ID) {
             cout << timeAsUs(eventlist().now()) <<" name " <<_nodename <<" _queuesize_low " 
