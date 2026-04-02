@@ -750,7 +750,11 @@ int main(int argc, char **argv) {
     vector<unique_ptr<FatTreeTopology>> topo;
     topo.resize(planes);
     for (uint32_t p = 0; p < planes; p++) {
-        topo[p] = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr);
+        if (log_tor_downqueue || log_tor_upqueue) {
+            topo[p] = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr, &logfile);
+        } else {
+            topo[p] = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr);
+        }
 
         if (log_switches) {
             topo[p]->add_switch_loggers(logfile, logtime);

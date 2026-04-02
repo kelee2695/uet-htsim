@@ -53,6 +53,11 @@ run_one() {
     fi
 }
 
+run_analysis() {
+    echo "生成队列分析报告..."
+    python3 "$SCRIPT_DIR/analyze_queues.py" -i "$EXPERIMENT_RESULT_DIR" -o "$EXPERIMENT_RESULT_DIR/queue_analysis" >/dev/null 2>&1
+}
+
 while IFS='|' read -r name cmd result logf; do
     while [[ $(wc -l < "$PIDS_FILE") -ge $MAX_CONCURRENT ]]; do
         sleep 1
@@ -72,6 +77,8 @@ rm -f "$PIDS_FILE"
 msg "所有实验已完成"
 
 [[ -s "$STATUS_FILE" ]] && python3 "$SCRIPT_DIR/analyze_experiments.py" "$EXPERIMENT_RESULT_DIR" "${EXPERIMENT_RESULT_DIR}/概要" 2>/dev/null && msg "整体分析完成"
+
+run_analysis
 
 rm -f "$STATUS_FILE"
 exit 0

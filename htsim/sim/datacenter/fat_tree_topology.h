@@ -236,7 +236,8 @@ public:
     FatTreeTopology(const FatTreeTopologyCfg* cfg,
                     QueueLoggerFactory* logger_factory,
                     EventList* ev,
-                    FirstFit * fit);
+                    FirstFit * fit,
+                    Logfile* logfile = nullptr);
     ~FatTreeTopology() override;
 
     vector <Switch*> switches_lp;
@@ -261,6 +262,7 @@ public:
     QueueLoggerFactory* _logger_factory;
     EventList* _eventlist;
     FirstFit* _ff;
+    Logfile* _logfile;
 
     virtual vector<const Route*>* get_bidir_paths(uint32_t src, uint32_t dest, bool reverse);
 

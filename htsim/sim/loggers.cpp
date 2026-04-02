@@ -244,7 +244,7 @@ QueueLoggerSampling::logQueue(BaseQueue& queue, QueueEvent ev, Packet &pkt) {
     case PKT_SERVICE: // we've just been working
         break;
     case PKT_ENQUEUE:
-        _cumarr += timeAsSec(queue.drainTime(&pkt));
+        _cumarr += 1;  // count packets
         if (queue.queuesize() > pkt.size()) // we've just been working
             {}
         else { // we've just been idling 
@@ -262,7 +262,7 @@ QueueLoggerSampling::logQueue(BaseQueue& queue, QueueEvent ev, Packet &pkt) {
             // logger can't make
             // sense of it
             double localdroptime = timeAsSec(queue.drainTime(&pkt));
-            _cumarr += localdroptime;
+            _cumarr += 1;  // count packets
             _cumdrop += localdroptime;
             _lastDroppedInD = pkt.size();
             _numDropsInD++;

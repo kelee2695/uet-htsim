@@ -770,12 +770,14 @@ void FatTreeTopologyCfg::check_consistency() const {
 FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
                                 QueueLoggerFactory* logger_factory,
                                 EventList* ev,
-                                FirstFit * fit
+                                FirstFit * fit,
+                                Logfile* logfile
                                 ):
                                 _logger_factory(logger_factory),
                                 _eventlist(ev),
                                 _ff(fit),
-                                _cfg(cfg)
+                                _cfg(cfg),
+                                _logfile(logfile)
                                 {
     // Only build topology after verifying that things are in order.
     if (_cfg->_from_file) {
@@ -850,7 +852,7 @@ FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
             
                 queues_nlp_ns[tor][srv][b] = alloc_queue(queueLogger, _cfg->_queue_down[TOR_TIER], DOWNLINK, TOR_TIER, true);
                 queues_nlp_ns[tor][srv][b]->setName("LS" + ntoa(tor) + "->DST" +ntoa(srv) + "(" + ntoa(b) + ")");
-                //if (logfile) logfile->writeName(*(queues_nlp_ns[tor][srv]));
+                if (_logfile) _logfile->writeName(*(queues_nlp_ns[tor][srv][b]));
                 simtime_picosec hop_latency = (_cfg->_hop_latency == 0) ? _cfg->_link_latencies[TOR_TIER] : _cfg->_hop_latency;
                 pipes_nlp_ns[tor][srv][b] = new Pipe(hop_latency, *_eventlist);
                 pipes_nlp_ns[tor][srv][b]->setName("Pipe-LS" + ntoa(tor)  + "->DST" + ntoa(srv) + "(" + ntoa(b) + ")");
@@ -865,7 +867,7 @@ FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
                 queues_ns_nlp[srv][tor][b] = alloc_src_queue(queueLogger);   
                 queues_ns_nlp[srv][tor][b]->setName("SRC" + ntoa(srv) + "->LS" +ntoa(tor) + "(" + ntoa(b) + ")");
                 //cout << queues_ns_nlp[srv][tor][b]->str() << endl;
-                //if (logfile) logfile->writeName(*(queues_ns_nlp[srv][tor]));
+                if (_logfile) _logfile->writeName(*(queues_ns_nlp[srv][tor][b]));
 
                 queues_ns_nlp[srv][tor][b]->setRemoteEndpoint(switches_lp[tor]);
 
@@ -919,7 +921,7 @@ FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
                     queues_nup_nlp[agg][tor][b] = alloc_queue((QueueLogger*)queueLogger, (const mem_b)_cfg->_queue_down[AGG_TIER], DOWNLINK, AGG_TIER);
 
                 queues_nup_nlp[agg][tor][b]->setName("US" + ntoa(agg) + "->LS_" + ntoa(tor) + "(" + ntoa(b) + ")");
-                //if (logfile) logfile->writeName(*(queues_nup_nlp[agg][tor]));
+                if (_logfile) _logfile->writeName(*(queues_nup_nlp[agg][tor][b]));
             
                 simtime_picosec hop_latency = (_cfg->_hop_latency == 0) ? _cfg->_link_latencies[AGG_TIER] : _cfg->_hop_latency;
                 pipes_nup_nlp[agg][tor][b] = new Pipe(hop_latency, *_eventlist);
@@ -942,7 +944,7 @@ FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
 
                 queues_nlp_nup[tor][agg][b]->setName("LS" + ntoa(tor) + "->US" + ntoa(agg) + "(" + ntoa(b) + ")");
                 //cout << queues_nlp_nup[tor][agg][b]->str() << endl;
-                //if (logfile) logfile->writeName(*(queues_nlp_nup[tor][agg]));
+                if (_logfile) _logfile->writeName(*(queues_nlp_nup[tor][agg][b]));
 
                 assert(switches_lp[tor]->addPort(queues_nlp_nup[tor][agg][b]) < 128);
                 assert(switches_up[agg]->addPort(queues_nup_nlp[agg][tor][b]) < 128);
@@ -996,7 +998,7 @@ FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
                     queues_nup_nc[agg][core][b] = alloc_queue(queueLogger, _cfg->_queue_up[AGG_TIER], UPLINK, AGG_TIER);
                     queues_nup_nc[agg][core][b]->setName("US" + ntoa(agg) + "->CS" + ntoa(core) + "(" + ntoa(b) + ")");
                     //cout << queues_nup_nc[agg][core][b]->str() << endl;
-                    //if (logfile) logfile->writeName(*(queues_nup_nc[agg][core]));
+                    if (_logfile) _logfile->writeName(*(queues_nup_nc[agg][core][b]));
         
                     simtime_picosec hop_latency = (_cfg->_hop_latency == 0) ? _cfg->_link_latencies[CORE_TIER] : _cfg->_hop_latency;
                     pipes_nup_nc[agg][core][b] = new Pipe(hop_latency, *_eventlist);
@@ -1033,7 +1035,7 @@ FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
                         new LosslessInputQueue(*_eventlist, queues_nup_nc[agg][core][b], switches_c[core], hop_latency);
                         new LosslessInputQueue(*_eventlist, queues_nc_nup[core][agg][b], switches_up[agg], hop_latency);
                     }
-                    //if (logfile) logfile->writeName(*(queues_nc_nup[core][agg]));
+                    if (_logfile) _logfile->writeName(*(queues_nc_nup[core][agg][b]));
             
                     pipes_nc_nup[core][agg][b] = new Pipe(hop_latency, *_eventlist);
                     pipes_nc_nup[core][agg][b]->setName("Pipe-CS" + ntoa(core) + "->US" + ntoa(agg) + "(" + ntoa(b) + ")");
