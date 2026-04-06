@@ -1,0 +1,41 @@
+{
+  "experiments": [
+    {
+      "name": "roce_no_dcqcn",
+      "description": "ROCE without DCQCN: incast 64to1 1MB, queue 300, PFC thresholds 248-250",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_roce",
+      "args": [
+        "-nodes", "256",
+        "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/alltoall_256_100KB_parallel.cm",
+        "-strat", "ecmp_host",
+        "-paths", "2048",
+        "-q", "300",
+        "-pfc_thresholds", "248", "250",
+        "-end", "10000",
+        "-seed", "42"
+      ],
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result_roce/roce_no_dcqcn.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result_roce/roce_no_dcqcn.log"
+    },
+    {
+      "name": "roce_with_dcqcn",
+      "description": "ROCE with DCQCN: incast 64to1 1MB, queue 300, PFC thresholds 248-250, ECN threshold 90",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_roce",
+      "args": [
+        "-nodes", "256",
+        "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/alltoall_256_100KB_parallel.cm",
+        "-strat", "ecmp_host",
+        "-paths", "2048",
+        "-q", "300",
+        "-pfc_thresholds", "248", "250",
+        "-dcqcn", "90",
+        "-end", "10000",
+        "-seed", "42"
+      ],
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result_roce/roce_with_dcqcn.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result_roce/roce_with_dcqcn.log"
+    }
+  ]
+}

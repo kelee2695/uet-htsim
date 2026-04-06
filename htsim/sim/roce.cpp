@@ -314,6 +314,12 @@ void RoceSrc::doNextEvent() {
     }
 
     assert(_flow_started);
+    
+    // Stop scheduling if flow is done
+    if (_done) {
+        return;
+    }
+    
     if (_log_me) 
         cout << "Src " << get_id() << " do next event\n";
         

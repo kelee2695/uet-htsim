@@ -395,7 +395,7 @@ int main(int argc, char **argv) {
     unique_ptr<FatTreeTopology> top;
     unique_ptr<FatTreeTopologyCfg> topo_cfg;
     if (topo_file) {
-        topo_cfg = FatTreeTopologyCfg::load(topo_file, queuesize, qt, snd_type);
+        topo_cfg = FatTreeTopologyCfg::load(topo_file, 0, qt, snd_type);
 
         if (topo_cfg->no_of_nodes() != no_of_nodes) {
             cerr << "Mismatch between connection matrix (" << no_of_nodes << " nodes) and topology ("
@@ -403,9 +403,11 @@ int main(int argc, char **argv) {
             exit(1);
         }
     } else {
-        topo_cfg = make_unique<FatTreeTopologyCfg>(tiers, no_of_nodes, linkspeed, queuesize, 
+        topo_cfg = make_unique<FatTreeTopologyCfg>(tiers, no_of_nodes, linkspeed, 0, 
                                                    hop_latency, switch_latency, qt, snd_type);
     }
+
+    topo_cfg->set_queue_sizes(queuesize);
 
     if (topo_num_failed > 0) {
         topo_cfg->set_failed_links(topo_num_failed);

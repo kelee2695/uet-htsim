@@ -112,7 +112,12 @@ void DCQCNSrc::doNextEvent(){
 
     RoceSrc::doNextEvent();
 
-    cout << "Adding " << (_highest_sent - _old_highest_sent) << " to sent bytes " << _byte_counter << " " << _highest_sent << endl;
+    // Stop DCQCN scheduling if flow is done
+    if (_done) {
+        return;
+    }
+
+    // cout << "Adding " << (_highest_sent - _old_highest_sent) << " to sent bytes " << _byte_counter << " " << _highest_sent << endl;
 
     _byte_counter += (_highest_sent - _old_highest_sent);
     _old_highest_sent = _highest_sent;

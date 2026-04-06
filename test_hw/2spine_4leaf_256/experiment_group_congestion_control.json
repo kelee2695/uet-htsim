@@ -2,8 +2,8 @@
   "experiments": [
     {
       "name": "cc_nscc",
-      "description": "拥塞控制：NSCC（默认），队列大小300",
-      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "description": "拥塞控制：NSCC（发送端），队列大小300",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
       "args": [
         "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_64to1_1MB.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
@@ -19,7 +19,7 @@
     {
       "name": "cc_constant",
       "description": "拥塞控制：Constant（固定窗口），队列大小300",
-      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
       "args": [
         "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_64to1_1MB.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
@@ -31,6 +31,39 @@
       ],
       "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/cc_constant.txt",
       "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/cc_constant.log"
+    },
+    {
+      "name": "cc_rccc",
+      "description": "拥塞控制：RCCC（接收端），队列大小300",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
+      "args": [
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_64to1_1MB.cm",
+        "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
+        "-receiver_cc_only",
+        "-log", "tor_upqueue",
+        "-logtime_us", "20",
+        "-q", "300",
+        "-end", "0"
+      ],
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/cc_rccc.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/cc_rccc.log"
+    },
+    {
+      "name": "cc_nscc_rccc",
+      "description": "拥塞控制：NSCC + RCCC混合模式（发送端NSCC + 接收端RCCC），队列大小300",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
+      "args": [
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_64to1_1MB.cm",
+        "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
+        "-sender_cc_algo", "nscc",
+        "-receiver_cc",
+        "-log", "tor_upqueue",
+        "-logtime_us", "20",
+        "-q", "300",
+        "-end", "0"
+      ],
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/cc_nscc_rccc.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/cc_nscc_rccc.log"
     }
   ]
 }
