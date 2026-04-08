@@ -39,7 +39,7 @@ def parse_result_file(result_file):
         
         # 提取流完成信息
         if 'finished at' in line:
-            match = re.search(r'Flow\s+(\S+)\s+flowId\s+(\d+)\s+uecSrc\s+(\d+)\s+finished at\s+(\d+\.\d+)\s+total messages\s+(\d+)\s+total packets\s+(\d+)\s+RTS\s+(\d+)\s+total bytes\s+(\d+)', line)
+            match = re.search(r'Flow\s+(\S+)\s+flowId\s+(\d+)\s+uecSrc\s+(\d+)\s+finished at\s+(\d+(?:\.\d+)?)\s+total messages\s+(\d+)\s+total packets\s+(\d+)\s+RTS\s+(\d+)\s+total bytes\s+(\d+)', line)
             if match:
                 flow_name = match.group(1)
                 flow_id = match.group(2)
