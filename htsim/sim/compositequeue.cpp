@@ -105,10 +105,11 @@ void CompositeQueue::completeService(){
                 
                 if (ecn_notify_dst != UINT32_MAX && ecn_notify_flow_id != 0) {
                     UecEcnNotifyPacket* ecn_notify = UecEcnNotifyPacket::newpkt(
-                        pkt->flow(), NULL, ecn_notify_dst,
-                        ecn_notify_flow_id, pkt->pathid()
+                        pkt->flow(), ecn_notify_dst,
+                        ecn_notify_flow_id, pkt->pathid(),
+                        _queuesize_low, _queuesize_high, _ecn_tag
                     );
-                    // _switch->receivePacket(*ecn_notify);
+                    _switch->receivePacket(*ecn_notify);
                     
                     cout << "[ECN Notify] queue_id=" << _queue_id 
                         << " _queuesize_low=" << _queuesize_low 

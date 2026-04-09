@@ -381,15 +381,15 @@ protected:
 };
 
 class UecEcnNotifyPacket : public UecBasePacket {
-    using Packet::set_route;
 public:
-    inline static UecEcnNotifyPacket* newpkt(PacketFlow& flow, const Route* route,
-                                              uint32_t dst, flowid_t flow_id, uint32_t path_id) {
+    inline static UecEcnNotifyPacket* newpkt(PacketFlow& flow,
+                                              uint32_t dst, flowid_t flow_id, uint32_t path_id,
+                                              mem_b queue_size_low, mem_b queue_size_high, int ecn_tag) {
         UecEcnNotifyPacket* p = _packetdb.allocPacket();
         p->set_attrs(flow, ACKSIZE, 0);
-        if (route) {
-            p->set_route();
-        }
+        // Note: No set_route() call here. ECN notification packets don't have a predefined route.
+        // The switch will determine the route dynamically based on destination address.
+        
         p->_type = UEC_ECNNOTIFY;
         p->_is_header = true;
         p->_bounced = false;
@@ -398,13 +398,22 @@ public:
         p->set_pathid(path_id);
         p->_direction = NONE;
         p->_path_len = 0;
+        p->_queue_size_low = queue_size_low;
+        p->_queue_size_high = queue_size_high;
+        p->_ecn_tag = ecn_tag;
+        p->_ev = path_id;  // Store the data packet's path_id for congestion control
         return p;
     }
 
     void free() { set_pathid(UINT32_MAX), _packetdb.freePacket(this); }
 
-    inline flowid_t flow_id() const { return _flow_id; }
+    // Return the flow ID for routing lookup (sink's flow ID)
+    // This is used by the switch to find the correct host route
     inline flowid_t get_flow_id() const { return _flow_id; }
+    inline mem_b queue_size_low() const { return _queue_size_low; }
+    inline mem_b queue_size_high() const { return _queue_size_high; }
+    inline int ecn_tag() const { return _ecn_tag; }
+    inline uint32_t ev() const { return _ev; }  // Return the data packet's path_id
 
     virtual PktPriority priority() const { return Packet::PRIO_HI; }
 
@@ -412,6 +421,10 @@ public:
 
 protected:
     flowid_t _flow_id;
+    mem_b _queue_size_low;
+    mem_b _queue_size_high;
+    int _ecn_tag;
+    uint32_t _ev;  // Path ID of the data packet that triggered ECN (for congestion control)
     static PacketDB<UecEcnNotifyPacket> _packetdb;
 };
 

@@ -650,7 +650,18 @@ void UecSrc::receivePacket(Packet& pkt, uint32_t portnum) {
             return;
         }
         case UEC_ECNNOTIFY: {
-            cout << "UecSrc::receivePacket receive UEC_ECNNOTIFY" << endl;
+            const UecEcnNotifyPacket& ecn_pkt = (const UecEcnNotifyPacket&)pkt;
+            cout << "[UEC_ECNNOTIFY] Received ECN notification:"
+                 << " dst=" << ecn_pkt.dst() << " (this=" << _node_num << ")"
+                 << " packet_flow_id=" << ecn_pkt.flow_id() << " (this=" << _flow.flow_id() << ")"  // Packet base class flow_id (src's flow)
+                 << " notify_flow_id=" << ecn_pkt.get_flow_id() << " (sink=" << (_sink ? _sink->flowId() : 0) << ")"  // UecEcnNotifyPacket's _flow_id (sink's flow)
+                 << " ev(data_path_id)=" << ecn_pkt.ev()  // _ev: data packet's path_id for congestion control
+                 << " queue_size_low=" << ecn_pkt.queue_size_low()
+                 << " queue_size_high=" << ecn_pkt.queue_size_high()
+                 << " ecn_tag=" << ecn_pkt.ecn_tag()
+                 << " size=" << ecn_pkt.size()
+                 << " type=" << ecn_pkt.type()
+                 << endl;
             pkt.free();
             return;
         }
