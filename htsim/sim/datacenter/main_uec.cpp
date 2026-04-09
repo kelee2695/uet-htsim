@@ -912,6 +912,7 @@ int main(int argc, char **argv) {
 
             uec_src->setName("Uec_" + ntoa(src) + "_" + ntoa(dest));
             logfile.writeName(*uec_src);
+            uec_src->setSrc(src);  // Set source host address (0-255) for ECN notification routing
             uec_snk->setSrc(src);
 
             if (UecSink::_model_pcie){

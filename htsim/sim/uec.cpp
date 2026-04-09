@@ -650,18 +650,7 @@ void UecSrc::receivePacket(Packet& pkt, uint32_t portnum) {
             return;
         }
         case UEC_ECNNOTIFY: {
-            const UecEcnNotifyPacket& ecn_pkt = (const UecEcnNotifyPacket&)pkt;
-            cout << "[UEC_ECNNOTIFY] Received ECN notification:"
-                 << " dst=" << ecn_pkt.dst() << " (this=" << _node_num << ")"
-                 << " packet_flow_id=" << ecn_pkt.flow_id() << " (this=" << _flow.flow_id() << ")"  // Packet base class flow_id (src's flow)
-                 << " notify_flow_id=" << ecn_pkt.get_flow_id() << " (sink=" << (_sink ? _sink->flowId() : 0) << ")"  // UecEcnNotifyPacket's _flow_id (sink's flow)
-                 << " ev(data_path_id)=" << ecn_pkt.ev()  // _ev: data packet's path_id for congestion control
-                 << " queue_size_low=" << ecn_pkt.queue_size_low()
-                 << " queue_size_high=" << ecn_pkt.queue_size_high()
-                 << " ecn_tag=" << ecn_pkt.ecn_tag()
-                 << " size=" << ecn_pkt.size()
-                 << " type=" << ecn_pkt.type()
-                 << endl;
+            processEcnNotify((const UecEcnNotifyPacket&)pkt);
             pkt.free();
             return;
         }
@@ -1640,6 +1629,25 @@ void UecSrc::processPull(const UecPullPacket& pkt) {
     sendIfPermitted();
 }
 
+void UecSrc::processEcnNotify(const UecEcnNotifyPacket& pkt) {
+    _nic.logReceivedCtrl(pkt.size());
+    
+    cout << "[UEC_ECNNOTIFY] Received ECN notification:"
+         << " dst=" << pkt.dst() << " (this=" << _srcaddr << ")"
+         << " packet_flow_id=" << pkt.flow_id() << " (this=" << _flow.flow_id() << ")"  // Packet base class flow_id (src's flow)
+         << " notify_flow_id=" << pkt.get_flow_id() << " (sink=" << (_sink ? _sink->flowId() : 0) << ")"  // UecEcnNotifyPacket's _flow_id (sink's flow)
+         << " ev(data_path_id)=" << pkt.ev()  // _ev: data packet's path_id for congestion control
+         << " queue_size_low=" << pkt.queue_size_low()
+         << " queue_size_high=" << pkt.queue_size_high()
+         << " ecn_tag=" << pkt.ecn_tag()
+         << " size=" << pkt.size()
+         << " type=" << pkt.type()
+         << endl;
+    
+    // TODO: Add congestion control logic here
+    // For example: reduce cwnd, mark path as congested, etc.
+}
+
 void UecSrc::doNextEvent() {
     if (_rtx_timeout_pending && eventlist().now() == _rtx_timeout) {
         clearRTO();
@@ -2099,7 +2107,7 @@ mem_b UecSrc::sendNewPacket(const Route& route) {
     auto* p = UecDataPacket::newpkt(_flow, route, _highest_sent, full_pkt_size, ptype,
                                      _pull_target, _dstaddr);
 
-    p->set_src(_node_num);
+    p->set_src(_srcaddr);  // Use host address (0-255) instead of _node_num for ECN notification routing
     p->set_sink_flow_id(_sink->flowId());
 
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);
@@ -2147,7 +2155,7 @@ mem_b UecSrc::sendRtxPacket(const Route& route) {
     auto* p = UecDataPacket::newpkt(_flow, route, seq_no, full_pkt_size, UecDataPacket::DATA_RTX,
                                      _pull_target, _dstaddr);
 
-    p->set_src(_node_num);
+    p->set_src(_srcaddr);  // Use host address (0-255) instead of _node_num for ECN notification routing
     p->set_sink_flow_id(_sink->flowId());
 
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);
@@ -2182,7 +2190,7 @@ void UecSrc::sendProbe() {
     auto* p = UecDataPacket::newpkt(_flow, NULL, _probe_seqno, _hdr_size,
                                     UecBasePacket::DATA_PROBE, 0, _dstaddr);
     p->set_dst(_dstaddr);
-    p->set_src(_node_num);
+    p->set_src(_srcaddr);  // Use host address (0-255) instead of _node_num for ECN notification routing
     p->set_sink_flow_id(_sink->flowId());
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);
     p->set_pathid(ev);

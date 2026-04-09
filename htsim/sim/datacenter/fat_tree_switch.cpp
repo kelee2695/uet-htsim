@@ -327,6 +327,13 @@ uint16_t FatTreeSwitch::_trim_size = 64;
 bool FatTreeSwitch::_disable_trim = false;
 
 Route* FatTreeSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port){
+    if (pkt.type() == UEC_ECNNOTIFY) {
+        cout << "[FatTreeSwitch::getNextHop] UEC_ECNNOTIFY: dst=" << pkt.dst()
+             << " flow_id=" << pkt.flow_id()
+             << " switch_id=" << _id
+             << endl;
+    }
+    
     vector<FibEntry*> * available_hops = _fib->getRoutes(pkt.dst());
 
     if (available_hops){

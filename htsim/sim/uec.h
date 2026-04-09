@@ -154,6 +154,8 @@ public:
     void doNextEvent();
     uint32_t dst() { return _dstaddr; }
     void setDst(uint32_t dst) { _dstaddr = dst; }
+    uint32_t src() { return _srcaddr; }
+    void setSrc(uint32_t src) { _srcaddr = src; }
 
     // Functions from UecTransportConnection
     virtual void continueConnection() override;
@@ -292,6 +294,7 @@ public:
     void processAck(const UecAckPacket& pkt);
     void processNack(const UecNackPacket& pkt);
     void processPull(const UecPullPacket& pkt);
+    void processEcnNotify(const UecEcnNotifyPacket& pkt);
     void runSleek(uint32_t ooo, UecBasePacket::seq_t cum_ack);
 
     //added for NSCC
@@ -441,6 +444,7 @@ private:
     PacketFlow _flow;
     string _nodename;
     int _node_num;
+    uint32_t _srcaddr;  // Host address (0-255), used for ECN notification routing
     uint32_t _dstaddr;
 };
 
