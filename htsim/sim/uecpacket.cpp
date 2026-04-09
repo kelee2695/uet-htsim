@@ -5,6 +5,7 @@ PacketDB<UecAckPacket> UecAckPacket::_packetdb;
 PacketDB<UecNackPacket> UecNackPacket::_packetdb;
 PacketDB<UecPullPacket> UecPullPacket::_packetdb;
 PacketDB<UecRtsPacket> UecRtsPacket::_packetdb;
+PacketDB<UecEcnNotifyPacket> UecEcnNotifyPacket::_packetdb;
 
 UecBasePacket::pull_quanta
 UecBasePacket::quantize_floor(mem_b bytes) {

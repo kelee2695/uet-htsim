@@ -649,6 +649,11 @@ void UecSrc::receivePacket(Packet& pkt, uint32_t portnum) {
             pkt.free();
             return;
         }
+        case UEC_ECNNOTIFY: {
+            cout << "UecSrc::receivePacket receive UEC_ECNNOTIFY" << endl;
+            pkt.free();
+            return;
+        }
         default: {
             cout << "UecSrc::receivePacket receive default\n";
 
@@ -2083,6 +2088,9 @@ mem_b UecSrc::sendNewPacket(const Route& route) {
     auto* p = UecDataPacket::newpkt(_flow, route, _highest_sent, full_pkt_size, ptype,
                                      _pull_target, _dstaddr);
 
+    p->set_src(_node_num);
+    p->set_sink_flow_id(_sink->flowId());
+
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);
     p->set_pathid(ev);
     p->flow().logTraffic(*p, *this, TrafficLogger::PKT_CREATESEND);
@@ -2128,6 +2136,9 @@ mem_b UecSrc::sendRtxPacket(const Route& route) {
     auto* p = UecDataPacket::newpkt(_flow, route, seq_no, full_pkt_size, UecDataPacket::DATA_RTX,
                                      _pull_target, _dstaddr);
 
+    p->set_src(_node_num);
+    p->set_sink_flow_id(_sink->flowId());
+
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);
     p->set_pathid(ev);
     p->flow().logTraffic(*p, *this, TrafficLogger::PKT_CREATESEND);
@@ -2160,6 +2171,8 @@ void UecSrc::sendProbe() {
     auto* p = UecDataPacket::newpkt(_flow, NULL, _probe_seqno, _hdr_size,
                                     UecBasePacket::DATA_PROBE, 0, _dstaddr);
     p->set_dst(_dstaddr);
+    p->set_src(_node_num);
+    p->set_sink_flow_id(_sink->flowId());
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);
     p->set_pathid(ev);
     // p->sendOn();

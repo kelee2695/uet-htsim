@@ -19,14 +19,14 @@
     },
     {
       "name": "nscc_composite_64pair_10MB",
-      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
       "args": [
         "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/permutation_64pair_10MB.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
         "-logtime_us", "20",
-        "-sender_cc_algo", "nscc",
+        "-sender_cc_algo", "constant",
         "-queue_type", "composite",
         "-end", "0",
         "-q", "300"

@@ -5,6 +5,7 @@
 #include "callback_pipe.h"
 #include "queue_lossless.h"
 #include "queue_lossless_output.h"
+#include "uecpacket.h"
 
 unordered_map<BaseQueue*,uint32_t> FatTreeSwitch::_port_flow_counts;
 
@@ -419,7 +420,11 @@ Route* FatTreeSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port){
     if (_type == TOR){
         if ( _ft->cfg().HOST_POD_SWITCH(pkt.dst()) == _id) { 
             //this host is directly connected!
-            HostFibEntry* fe = _fib->getHostRoute(pkt.dst(),pkt.flow_id());
+            uint32_t lookup_flow_id = pkt.flow_id();
+            if (pkt.type() == UEC_ECNNOTIFY) {
+                lookup_flow_id = ((UecEcnNotifyPacket&)pkt).get_flow_id();
+            }
+            HostFibEntry* fe = _fib->getHostRoute(pkt.dst(), lookup_flow_id);
             assert(fe);
             pkt.set_direction(DOWN);
             return fe->getEgressPort();

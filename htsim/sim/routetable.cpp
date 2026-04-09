@@ -32,12 +32,21 @@ vector<FibEntry*>* RouteTable::getRoutes(int destination){
 }
 
 HostFibEntry* RouteTable::getHostRoute(int destination,int flowid){
-    if (_hostfib.find(destination) == _hostfib.end() ||
-        _hostfib[destination]->find(flowid) == _hostfib[destination]->end())
+    if (_hostfib.find(destination) == _hostfib.end()) {
         return NULL;
-    else {
-        return (*_hostfib[destination])[flowid];
     }
+    
+    auto it = _hostfib[destination]->find(flowid);
+    if (it != _hostfib[destination]->end()) {
+        return it->second;
+    }
+    
+    // If exact flowid not found, return the first available route
+    if (!_hostfib[destination]->empty()) {
+        return _hostfib[destination]->begin()->second;
+    }
+    
+    return NULL;
 }
 
 void RouteTable::setRoutes(int destination, vector<FibEntry*>* routes){

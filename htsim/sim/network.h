@@ -50,7 +50,7 @@ typedef enum {IP, TCP, TCPACK, TCPNACK, SWIFT, SWIFTACK, STRACK, STRACKACK,
               HPCC, HPCCACK, HPCCNACK,
               CNP,
               EQDSDATA, EQDSPULL, EQDSACK, EQDSNACK, EQDSRTS,
-              UECDATA, UECPULL, UECACK, UECNACK, UECRTS} packet_type;
+              UECDATA, UECPULL, UECACK, UECNACK, UECRTS, UEC_ECNNOTIFY} packet_type;
 
 typedef enum {NONE, UP, DOWN} packet_direction;
 

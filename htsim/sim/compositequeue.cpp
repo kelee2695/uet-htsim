@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include "ecn.h"
+#include "uecpacket.h"
 
 static int global_queue_id=0;
 #define DEBUG_QUEUE_ID -1 // set to queue ID to enable debugging
@@ -96,6 +97,26 @@ void CompositeQueue::completeService(){
         //ECN mark on deque
         if (ecn) {
             pkt->set_flags(pkt->flags() | _ecn_tag);
+            
+            if (pkt->type() == UECDATA) {
+                UecDataPacket* uec_pkt = static_cast<UecDataPacket*>(pkt);
+                uint32_t ecn_notify_dst = uec_pkt->get_src();
+                uint32_t ecn_notify_flow_id = uec_pkt->get_sink_flow_id();
+                
+                if (ecn_notify_dst != UINT32_MAX && ecn_notify_flow_id != 0) {
+                    UecEcnNotifyPacket* ecn_notify = UecEcnNotifyPacket::newpkt(
+                        pkt->flow(), NULL, ecn_notify_dst,
+                        ecn_notify_flow_id, pkt->pathid()
+                    );
+                    // _switch->receivePacket(*ecn_notify);
+                    
+                    cout << "[ECN Notify] queue_id=" << _queue_id 
+                        << " _queuesize_low=" << _queuesize_low 
+                        << " _queuesize_high=" << _queuesize_high
+                        << " ecn_tag=" << _ecn_tag
+                        << endl;
+                }
+            }
         }
         if (_queue_id == DEBUG_QUEUE_ID) {
             cout << timeAsUs(eventlist().now()) <<" name " <<_nodename <<" _queuesize_low " 

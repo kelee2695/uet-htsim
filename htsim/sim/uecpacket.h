@@ -62,6 +62,7 @@ public:
         
         p->_ar = false;
         p->set_dst(destination);
+        p->_sink_flow_id = 0;
 
         p->_direction = NONE;
         p->_path_len = route.size();
@@ -113,6 +114,12 @@ public:
 
     inline int32_t path_id() const {if (_pathid!=UINT32_MAX) return _pathid; else return _route->path_id();}
 
+    inline void set_src(uint32_t s) { _src = s; }
+    inline uint32_t get_src() const { return _src; }
+
+    inline void set_sink_flow_id(uint32_t id) { _sink_flow_id = id; }
+    inline uint32_t get_sink_flow_id() const { return _sink_flow_id; }
+
     virtual PktPriority priority() const {
         if (_is_header) {
             return Packet::PRIO_HI;
@@ -136,6 +143,9 @@ protected:
     //trim information, need to see if this stays here or goes to separate header.
     std::optional<int32_t> _trim_hop;
     packet_direction _trim_direction;
+    
+    uint32_t _src;
+    uint32_t _sink_flow_id;
     static PacketDB<UecDataPacket> _packetdb;
 };
 
@@ -368,6 +378,41 @@ public:
 
 protected:
     static PacketDB<UecRtsPacket> _packetdb;
+};
+
+class UecEcnNotifyPacket : public UecBasePacket {
+    using Packet::set_route;
+public:
+    inline static UecEcnNotifyPacket* newpkt(PacketFlow& flow, const Route* route,
+                                              uint32_t dst, flowid_t flow_id, uint32_t path_id) {
+        UecEcnNotifyPacket* p = _packetdb.allocPacket();
+        p->set_attrs(flow, ACKSIZE, 0);
+        if (route) {
+            p->set_route();
+        }
+        p->_type = UEC_ECNNOTIFY;
+        p->_is_header = true;
+        p->_bounced = false;
+        p->_flow_id = flow_id;
+        p->set_dst(dst);
+        p->set_pathid(path_id);
+        p->_direction = NONE;
+        p->_path_len = 0;
+        return p;
+    }
+
+    void free() { set_pathid(UINT32_MAX), _packetdb.freePacket(this); }
+
+    inline flowid_t flow_id() const { return _flow_id; }
+    inline flowid_t get_flow_id() const { return _flow_id; }
+
+    virtual PktPriority priority() const { return Packet::PRIO_HI; }
+
+    virtual ~UecEcnNotifyPacket() {}
+
+protected:
+    flowid_t _flow_id;
+    static PacketDB<UecEcnNotifyPacket> _packetdb;
 };
 
 #endif

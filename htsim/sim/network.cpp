@@ -255,6 +255,9 @@ Packet::str() const {
     case UECRTS:
         s = "UECRTS";
         break;
+    case UEC_ECNNOTIFY:
+        s = "UEC_ECNNOTIFY";
+        break;
     }
     return s;
 }
