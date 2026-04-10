@@ -1,10 +1,10 @@
 {
   "experiments": [
     {
-      "name": "nscc_64pair_10MB_hashx",
+      "name": "nscc_alltoall_100KB_hashx",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/permutation_64pair_10MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/alltoall_256_100KB_parallel.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -16,14 +16,14 @@
         "-end", "0",
         "-q", "300"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB_hashx.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB_hashx.log"
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB_hashx.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB_hashx.log"
     },
     {
-      "name": "nscc_64pair_10MB_hashx_hashx",
+      "name": "nscc_alltoall_100KB_hashx_hashx",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/permutation_64pair_10MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/alltoall_256_100KB_parallel.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -35,14 +35,14 @@
         "-end", "0",
         "-q", "300"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB_hashx_hashx.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB_hashx_hashx_hashx.log"
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB_hashx_hashx.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB_hashx_hashx.log"
     },
     {
-      "name": "nscc_64pair_10MB",
+      "name": "nscc_alltoall_100KB",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/permutation_64pair_10MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/alltoall_256_100KB_parallel.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -54,14 +54,14 @@
         "-end", "0",
         "-q", "300"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB.log"
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB.log"
     },
     {
-      "name": "nscc_64pair_10MB_compare",
+      "name": "nscc_alltoall_100KB_compare",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/permutation_64pair_10MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/alltoall_256_100KB_parallel.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -73,8 +73,8 @@
         "-end", "0",
         "-q", "300"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB_compare.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_64pair_10MB_compare.log"
+      "output": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB_compare.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result/result_nscc_alltoall_100KB_compare.log"
     }
   ]
 }

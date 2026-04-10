@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
     bool enable_lossless_ecn = false;
     int lossless_ecn_threshold = 0;
 
-    enum LoadBalancing_Algo { BITMAP, REPS, REPS_LEGACY, OBLIVIOUS, MIXED};
+    enum LoadBalancing_Algo { BITMAP, REPS, REPS_LEGACY, OBLIVIOUS, MIXED, HASHX};
     LoadBalancing_Algo load_balancing_algo = MIXED;
 
     bool log_sink = false;
@@ -225,7 +225,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i],"-load_balancing_algo")){
             if (!strcmp(argv[i+1], "bitmap")) {
                 load_balancing_algo = BITMAP;
-            } 
+            }
             else if (!strcmp(argv[i+1], "reps")) {
                 load_balancing_algo = REPS;
             }
@@ -238,8 +238,11 @@ int main(int argc, char **argv) {
             else if (!strcmp(argv[i+1], "mixed")) {
                 load_balancing_algo = MIXED;
             }
+            else if (!strcmp(argv[i+1], "hashx")) {
+                load_balancing_algo = HASHX;
+            }
             else {
-                cout << "Unknown load balancing algorithm of type " << argv[i+1] << ", expecting bitmap, reps or reps2" << endl;
+                cout << "Unknown load balancing algorithm of type " << argv[i+1] << ", expecting bitmap, reps, reps_legacy, oblivious, mixed or hashx" << endl;
                 exit_error(argv[0]);
             }
             cout << "Load balancing algorithm set to  "<< argv[i+1] << endl;
@@ -527,6 +530,11 @@ int main(int argc, char **argv) {
                 route_strategy = ECMP_FIB;
                 path_entropy_size = 1;
                 FatTreeSwitch::set_strategy(FatTreeSwitch::RR);
+            } else if (!strcmp(argv[i+1], "hashx")) {
+                // HASHX: always use first available port
+                route_strategy = ECMP_FIB;
+                FatTreeSwitch::set_strategy(FatTreeSwitch::HASHX);
+                cout << "Using HASHX routing strategy (first available port)" << endl;
             }
             i++;
         } else {
@@ -851,6 +859,8 @@ int main(int argc, char **argv) {
                 mp = make_unique<UecMpOblivious>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == MIXED){
                 mp = make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
+            } else if (load_balancing_algo == HASHX){
+                mp = make_unique<UecMpHashx>(path_entropy_size, UecSrc::_debug, src, dest, ecn_low, ecn_high);
             } else {
                 cout << "ERROR: Failed to set multipath algorithm, abort." << endl;
                 abort();

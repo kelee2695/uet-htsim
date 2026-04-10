@@ -20,6 +20,13 @@ public:
      */
     virtual void processEv(uint16_t path_id, PathFeedback feedback) = 0;
     /**
+     * @param uint16_t path_id The path ID from ECN notification
+     * @param queue_size_low Queue size at low priority
+     * @param queue_size_high Queue size at high priority
+     * @param ecn_tag ECN tag value
+     */
+    virtual void processEv(uint16_t path_id, uint64_t queue_size_low, uint64_t queue_size_high, int ecn_tag) {};
+    /**
      * @param uint64_t seq_sent The sequence number to be sent
      * @param uint64_t cur_cwnd_in_pkts The current congestion window in packets.
      */
@@ -94,6 +101,23 @@ public:
 private:
     UecMpBitmap _bitmap;
     UecMpRepsLegacy _reps_legacy;
+};
+
+class UecMpHashx : public UecMultipath {
+public:
+    UecMpHashx(uint16_t no_of_paths, bool debug, uint32_t src = 0, uint32_t dst = 0,
+               uint64_t ecn_low = 0, uint64_t ecn_high = 0);
+    void processEv(uint16_t path_id, PathFeedback feedback) override;
+    void processEv(uint16_t path_id, uint64_t queue_size_low, uint64_t queue_size_high, int ecn_tag) override;
+    uint16_t nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) override;
+private:
+    uint16_t _no_of_paths;       // must be a power of 2
+    uint16_t _current_path;      // current path index for round-robin
+    vector<int> _path_weights;   // path weights for load balancing
+    uint32_t _src;               // source host ID
+    uint32_t _dst;               // destination host ID
+    uint64_t _ecn_low;           // ECN low threshold (in bytes)
+    uint64_t _ecn_high;          // ECN high threshold (in bytes)
 };
 
 

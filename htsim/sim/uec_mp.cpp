@@ -286,3 +286,127 @@ uint16_t UecMpMixed::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
         return _bitmap.nextEntropy(seq_sent, cur_cwnd_in_pkts);
     }
 }
+
+UecMpHashx::UecMpHashx(uint16_t no_of_paths, bool debug, uint32_t src, uint32_t dst,
+                       uint64_t ecn_low, uint64_t ecn_high)
+    : UecMultipath(debug),
+      _no_of_paths(no_of_paths),
+      _path_weights(),
+      _src(src),
+      _dst(dst),
+      _ecn_low(ecn_low),
+      _ecn_high(ecn_high)
+      {
+    // 使用 src 和 dst 计算初始路径（使用大质数增加哈希分散性）
+    // const uint32_t HASH_PRIME = 2654435761u;  // 大质数
+    _current_path =  _dst % _no_of_paths;
+    // _current_path = random() % _no_of_paths;
+
+    _path_weights.resize(_no_of_paths);
+    for (uint32_t i = 0; i < _no_of_paths; i++) {
+        _path_weights[i] = 8;
+    }
+
+    if (_debug)
+        cout << "Multipath"
+             << " Hashx"
+             << " _no_of_paths " << _no_of_paths
+             << " src " << _src
+             << " dst " << _dst
+             << " initial_path " << _current_path
+             << " ecn_low " << _ecn_low
+             << " ecn_high " << _ecn_high
+             << endl;
+}
+
+void UecMpHashx::processEv(uint16_t path_id, PathFeedback feedback) {
+    if (_debug) {
+        cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
+             << " Hashx processEv path_id " << path_id
+             << " feedback " << feedback << endl;
+    }
+}
+
+void UecMpHashx::processEv(uint16_t path_id, uint64_t queue_size_low, uint64_t queue_size_high, int ecn_tag) {
+    if (ecn_tag == 3) {
+        // ECN tag = 3, do nothing
+        if (_debug) {
+            cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
+                 << " Hashx processEvECN path_id " << path_id
+                 << " ecn_tag=3, no action" << endl;
+        }
+        return;
+    }
+
+    if (ecn_tag == 1) {
+        // ECN tag = 1, calculate weight based on queue size
+        if (path_id < _no_of_paths) {
+            int new_weight = 0;
+            if (_ecn_high > _ecn_low) {
+                // Calculate: 8 * (1 - (queue_low - ecn_low) / (ecn_high - ecn_low))
+                if (queue_size_low <= _ecn_low) {
+                    new_weight = 8;  // Queue below low threshold, full weight
+                } else if (queue_size_low >= _ecn_high) {
+                    new_weight = 0;  // Queue above high threshold, zero weight
+                } else {
+                    // Linear interpolation: weight = 8 * (1 - (queue_low - ecn_low) / (ecn_high - ecn_low))
+                    uint64_t numerator = 8 * (_ecn_high - queue_size_low);
+                    uint64_t denominator = _ecn_high - _ecn_low;
+                    new_weight = (int)(numerator / denominator);
+                    if (new_weight < 0) new_weight = 0;
+                    if (new_weight > 8) new_weight = 8;
+                }
+            } else {
+                // Invalid thresholds, use default
+                new_weight = 8;
+            }
+            _path_weights[path_id] = new_weight;
+            if (_debug) {
+                cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
+                     << " Hashx processEvECN path_id " << path_id
+                     << " ecn_tag=1, queue_low=" << queue_size_low
+                     << " ecn_low=" << _ecn_low << " ecn_high=" << _ecn_high
+                     << " new_weight=" << new_weight << endl;
+            }
+        }
+        return;
+    }
+
+    // Other ecn_tag values, just log for now
+    if (_debug) {
+        cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
+             << " Hashx processEvECN path_id " << path_id
+             << " queue_low " << queue_size_low
+             << " queue_high " << queue_size_high
+             << " ecn_tag " << ecn_tag << endl;
+    }
+}
+
+uint16_t UecMpHashx::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
+    uint16_t selected_path = _current_path;
+
+    // Check if current path weight is less than 8, increment and skip
+    while (_path_weights[selected_path] < 8) {
+        if (_debug) {
+            cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
+                 << " Hashx nextEntropy path " << selected_path
+                 << " weight=" << _path_weights[selected_path]
+                 << " incrementing and skipping" << endl;
+        }
+        _path_weights[selected_path]++;  // increment weight by 1
+        _current_path = (_current_path + 1) % _no_of_paths;
+        selected_path = _current_path;
+    }
+
+    // Move to next path for next time
+    _current_path = (_current_path + 1) % _no_of_paths;
+
+    if (_debug) {
+        cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
+             << " Hashx nextEntropy selected_path " << selected_path
+             << " weight " << _path_weights[selected_path]
+             << " next_path " << _current_path << endl;
+    }
+
+    return selected_path;
+}

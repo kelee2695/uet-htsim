@@ -415,6 +415,24 @@ Route* FatTreeSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port){
                 else ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
                 
                 break;
+            case HASHX:
+                // 根据交换机位置选择可用端口
+                if (_type == TOR) {
+                    // 叶交换机（TOR）：根据pathid选择对应路径
+                    ecmp_choice = pkt.pathid() % available_hops->size();
+                    cout << "[HASHX DEBUG] TOR switch_id=" << _id 
+                         << " pathid=" << pkt.pathid() 
+                         << " available_ports=" << available_hops->size()
+                         << " selected_port=" << ecmp_choice << endl;
+                } else {
+                    // 脊交换机（AGG/CORE）：选择第一个可用端口
+                    ecmp_choice = pkt.pathid() % available_hops->size();
+                    cout << "[HASHX DEBUG] SPINE switch_id=" << _id 
+                         << " pathid=" << pkt.pathid()
+                         << " available_ports=" << available_hops->size()
+                         << " selected_port=" << ecmp_choice << endl;
+                }
+                break;
             }
         
         FibEntry* e = (*available_hops)[ecmp_choice];

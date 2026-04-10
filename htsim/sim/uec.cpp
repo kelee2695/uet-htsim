@@ -1631,7 +1631,7 @@ void UecSrc::processPull(const UecPullPacket& pkt) {
 
 void UecSrc::processEcnNotify(const UecEcnNotifyPacket& pkt) {
     _nic.logReceivedCtrl(pkt.size());
-    
+
     cout << "[UEC_ECNNOTIFY] Received ECN notification:"
          << " dst=" << pkt.dst() << " (this=" << _srcaddr << ")"
          << " packet_flow_id=" << pkt.flow_id() << " (this=" << _flow.flow_id() << ")"  // Packet base class flow_id (src's flow)
@@ -1643,9 +1643,9 @@ void UecSrc::processEcnNotify(const UecEcnNotifyPacket& pkt) {
          << " size=" << pkt.size()
          << " type=" << pkt.type()
          << endl;
-    
-    // TODO: Add congestion control logic here
-    // For example: reduce cwnd, mark path as congested, etc.
+
+    // Process ECN notification with detailed queue information
+    _mp->processEv(pkt.ev(), pkt.queue_size_low(), pkt.queue_size_high(), pkt.ecn_tag());
 }
 
 void UecSrc::doNextEvent() {
