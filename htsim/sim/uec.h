@@ -214,7 +214,7 @@ public:
     static bool _sender_based_cc;
     static bool _receiver_based_cc;
 
-    enum Sender_CC { DCTCP, NSCC, CONSTANT};
+    enum Sender_CC { DCTCP, NSCC, CONSTANT, Z_INCAST};
     static Sender_CC _sender_cc_algo;
 
     static bool _disable_quick_adapt;
@@ -305,15 +305,24 @@ public:
     void quick_adapt(bool trimmed);
     void updateCwndOnAck_NSCC(bool skip, simtime_picosec delay, mem_b newly_acked_bytes);
     void updateCwndOnNack_NSCC(bool skip, mem_b nacked_bytes, bool last_hop);
+    void processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt);
 
     void updateCwndOnAck_DCTCP(bool skip, simtime_picosec delay, mem_b newly_acked_bytes);
     void updateCwndOnNack_DCTCP(bool skip, mem_b nacked_bytes, bool last_hop);
+    void processEcnNotify_DCTCP(const UecEcnNotifyPacket& pkt);
 
     void dontUpdateCwndOnAck(bool skip, simtime_picosec delay, mem_b newly_acked_bytes);
     void dontUpdateCwndOnNack(bool skip, mem_b nacked_bytes, bool last_hop);
+    void dontProcessEcnNotify(const UecEcnNotifyPacket& pkt);
+
+    // Z-INCAST algorithm functions
+    void updateCwndOnAck_Z_INCAST(bool skip, simtime_picosec delay, mem_b newly_acked_bytes);
+    void updateCwndOnNack_Z_INCAST(bool skip, mem_b nacked_bytes, bool last_hop);
+    void processEcnNotify_Z_INCAST(const UecEcnNotifyPacket& pkt);
 
     void (UecSrc::*updateCwndOnAck)(bool skip, simtime_picosec delay, mem_b newly_acked_bytes);
     void (UecSrc::*updateCwndOnNack)(bool skip, mem_b nacked_bytes, bool last_hop);
+    void (UecSrc::*processEcnNotifyHandler)(const UecEcnNotifyPacket& pkt);
 
     bool checkFinished(UecDataPacket::seq_t cum_ack);
 
@@ -369,11 +378,15 @@ public:
     static double _scaling_factor_a;
     static double _scaling_factor_b;
     static double _eta;
-    static double _qa_threshold; 
+    static double _qa_threshold;
     static double _delay_alpha;
     // static double _ecn_thresh;
     static uint32_t _adjust_bytes_threshold;
     static simtime_picosec _adjust_period_threshold;
+    // Z-INCAST parameters
+    static double _z_incast_alpha;  // 平滑因子a
+    static double _z_incast_b;      // b值，在初始化时计算: b = 初始窗口 / N
+    static double _z_incast_n;      // N值，从命令行输入
     //debug
     static flowid_t _debug_flowid;
 private:

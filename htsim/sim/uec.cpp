@@ -83,6 +83,12 @@ float UecSrc::loss_retx_factor = 1.5;
 int UecSrc::min_retx_config = 5;
 /* End SLEEK parameters */
 
+/* Z-INCAST parameters */
+double UecSrc::_z_incast_alpha = 0.5;  // 默认平滑因子a=0.5
+double UecSrc::_z_incast_b = 100.0;    // 默认b值
+double UecSrc::_z_incast_n = 1.0;      // 默认N值
+/* End Z-INCAST parameters */
+
 void UecSrc::initNsccParams(simtime_picosec network_rtt,
                             linkspeed_bps linkspeed,
                             simtime_picosec target_Qdelay,
@@ -170,6 +176,13 @@ void UecSrc::initNscc(mem_b cwnd, simtime_picosec peer_rtt) {
         _cwnd = _maxwnd;
     } else {
         _cwnd = cwnd;
+    }
+
+    // Z-INCAST: 如果是Z-INCAST算法，计算b值
+    if (_sender_cc_algo == Z_INCAST) {
+        _z_incast_b = _cwnd / _z_incast_n;
+        cout << " Z-INCAST: initial_cwnd=" << _cwnd << " N=" << _z_incast_n
+             << " b=" << _z_incast_b << endl;
     }
 
     cout << "Initialize per-instance NSCC parameters:"
@@ -559,14 +572,22 @@ UecSrc::UecSrc(TrafficLogger* trafficLogger,
             case DCTCP:
                 updateCwndOnAck = &UecSrc::updateCwndOnAck_DCTCP;
                 updateCwndOnNack = &UecSrc::updateCwndOnNack_DCTCP;
+                processEcnNotifyHandler = &UecSrc::processEcnNotify_DCTCP;
                 break;
             case NSCC:
                 updateCwndOnAck = &UecSrc::updateCwndOnAck_NSCC;
                 updateCwndOnNack = &UecSrc::updateCwndOnNack_NSCC;
+                processEcnNotifyHandler = &UecSrc::processEcnNotify_NSCC;
                 break;
             case CONSTANT:
                 updateCwndOnAck = &UecSrc::dontUpdateCwndOnAck;
                 updateCwndOnNack = &UecSrc::dontUpdateCwndOnNack;
+                processEcnNotifyHandler = &UecSrc::dontProcessEcnNotify;
+                break;
+            case Z_INCAST:
+                updateCwndOnAck = &UecSrc::updateCwndOnAck_Z_INCAST;
+                updateCwndOnNack = &UecSrc::updateCwndOnNack_Z_INCAST;
+                processEcnNotifyHandler = &UecSrc::processEcnNotify_Z_INCAST;
                 break;
             default:
                 cout << "Unknown CC algo specified " << _sender_cc_algo << endl;
@@ -1127,6 +1148,18 @@ void UecSrc::updateCwndOnNack_DCTCP(bool skip, mem_b nacked_bytes, bool last_hop
     _cwnd = max(_cwnd, (mem_b)_mtu);
 }
 
+void UecSrc::processEcnNotify_DCTCP(const UecEcnNotifyPacket& pkt) {
+    // DCTCP: 基于ECN标记进行窗口调整
+    // 这里可以实现DCTCP特定的ECN处理逻辑
+    // 目前先做空实现，可以根据需要添加
+    if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+        cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id() 
+             << " DCTCP ECN_NOTIFY ecn_tag=" << pkt.ecn_tag()
+             << " queue_size_low=" << pkt.queue_size_low()
+             << " queue_size_high=" << pkt.queue_size_high() << endl;
+    }
+}
+
 bool UecSrc::can_send_RCCC() {
     assert(_receiver_based_cc);
     return credit() > 0;
@@ -1388,7 +1421,71 @@ void UecSrc::updateCwndOnNack_NSCC(bool skip, mem_b nacked_bytes, bool last_hop)
     }
 }
 
+void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
+    // NSCC: 基于ECN标记进行窗口调整
+    // 这里可以实现NSCC特定的ECN处理逻辑
+    // 目前先做空实现，可以根据需要添加
+    if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+        cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+             << " NSCC ECN_NOTIFY ecn_tag=" << pkt.ecn_tag()
+             << " queue_size_low=" << pkt.queue_size_low()
+             << " queue_size_high=" << pkt.queue_size_high() << endl;
+    }
+}
+
 void UecSrc::dontUpdateCwndOnNack(bool skip, mem_b nacked_bytes, bool last_hop) {
+}
+
+void UecSrc::dontProcessEcnNotify(const UecEcnNotifyPacket& pkt) {
+    // CONSTANT算法：不处理ECN notify
+}
+
+void UecSrc::updateCwndOnAck_Z_INCAST(bool skip, simtime_picosec delay, mem_b newly_acked_bytes) {
+    // Z-INCAST: ACK时不调整窗口（空操作）
+}
+
+void UecSrc::updateCwndOnNack_Z_INCAST(bool skip, mem_b nacked_bytes, bool last_hop) {
+    // Z-INCAST: NACK时不调整窗口（空操作）
+}
+
+void UecSrc::processEcnNotify_Z_INCAST(const UecEcnNotifyPacket& pkt) {
+    // Z-INCAST: 基于ECN notify的窗口调整算法
+    // 只有ecn_tag == 3时才处理
+    if (pkt.ecn_tag() != 3) {
+        if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+            cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " Z_INCAST ECN_NOTIFY skipped (ecn_tag=" << pkt.ecn_tag()
+                 << " != 3)" << endl;
+        }
+        return;
+    }
+
+    // 获取旧窗口值
+    mem_b wo = _cwnd;
+
+    // 从ECN notify包中获取we_w_ratio
+    double we_w_ratio = pkt.we_w_ratio();
+
+    // 参数a（平滑因子）和b（从静态变量获取）
+    double a = _z_incast_alpha;
+    double b = _z_incast_b;
+
+    // 计算新窗口: wn = (1-a)*wo + a*(wo*we_w_ratio + b)
+    mem_b wn = (mem_b)((1 - a) * wo + a * (wo * we_w_ratio + b));
+
+    // 更新窗口
+    _cwnd = wn;
+
+    // 确保窗口在合理范围内
+    set_cwnd_bounds();
+
+    if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+        cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+             << " Z_INCAST ECN_NOTIFY ecn_tag=" << pkt.ecn_tag()
+             << " wo=" << wo << " we_w_ratio=" << we_w_ratio
+             << " a=" << a << " b=" << b << " wn=" << wn
+             << " final_cwnd=" << _cwnd << endl;
+    }
 }
 
 void UecSrc::update_base_rtt(simtime_picosec raw_rtt){
@@ -1646,6 +1743,13 @@ void UecSrc::processEcnNotify(const UecEcnNotifyPacket& pkt) {
 
     // Process ECN notification with detailed queue information
     _mp->processEv(pkt.ev(), pkt.queue_size_low(), pkt.queue_size_high(), pkt.ecn_tag());
+
+    // ============================================
+    // 关键：通过函数指针调用算法特定的ECN处理函数
+    // ============================================
+    if (_sender_based_cc) {
+        (this->*processEcnNotifyHandler)(pkt);
+    }
 }
 
 void UecSrc::doNextEvent() {

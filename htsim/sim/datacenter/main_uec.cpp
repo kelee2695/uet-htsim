@@ -200,17 +200,27 @@ int main(int argc, char **argv) {
             UecSrc::_sender_based_cc = true;
             sender_driven = true;
             
-            if (!strcmp(argv[i+1],"dctcp")) 
+            if (!strcmp(argv[i+1],"dctcp"))
                 UecSrc::_sender_cc_algo = UecSrc::DCTCP;
-            else if (!strcmp(argv[i+1],"nscc")) 
+            else if (!strcmp(argv[i+1],"nscc"))
                 UecSrc::_sender_cc_algo = UecSrc::NSCC;
-            else if (!strcmp(argv[i+1],"constant")) 
+            else if (!strcmp(argv[i+1],"constant"))
                 UecSrc::_sender_cc_algo = UecSrc::CONSTANT;
+            else if (!strcmp(argv[i+1],"z_incast"))
+                UecSrc::_sender_cc_algo = UecSrc::Z_INCAST;
             else {
                 cout << "UNKNOWN CC ALGO " << argv[i+1] << endl;
                 exit(1);
             }    
             cout << "sender based algo "<< argv[i+1] << endl;
+            i++;
+        } else if (!strcmp(argv[i],"-z_incast_alpha")) {
+            UecSrc::_z_incast_alpha = atof(argv[i+1]);
+            cout << "Setting Z-INCAST alpha to " << UecSrc::_z_incast_alpha << endl;
+            i++;
+        } else if (!strcmp(argv[i],"-z_incast_n")) {
+            UecSrc::_z_incast_n = atof(argv[i+1]);
+            cout << "Setting Z-INCAST N to " << UecSrc::_z_incast_n << endl;
             i++;
         } else if (!strcmp(argv[i],"-sender_cc")) {
             UecSrc::_sender_based_cc = true;
