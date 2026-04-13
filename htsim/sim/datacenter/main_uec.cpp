@@ -714,6 +714,10 @@ int main(int argc, char **argv) {
 
     simtime_picosec network_max_unloaded_rtt = calculate_rtt(topo_cfg.get(), linkspeed);
 
+    // Set the static network RTT for all CompositeQueues
+    CompositeQueue::setNetworkRtt(network_max_unloaded_rtt);
+    cout << "Setting CompositeQueue network RTT to " << timeAsUs(network_max_unloaded_rtt) << " us" << endl;
+
     mem_b queuesize = 0;
     if (!param_queuesize_set) {
         uint32_t bdp_pkt = calculate_bdp_pkt(topo_cfg.get(), linkspeed);

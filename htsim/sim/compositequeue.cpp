@@ -9,6 +9,9 @@
 static int global_queue_id=0;
 #define DEBUG_QUEUE_ID -1 // set to queue ID to enable debugging
 
+// Static network RTT - shared across all queues
+simtime_picosec CompositeQueue::_network_rtt = 0;
+
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, 
                                QueueLogger* logger, uint16_t trim_size, bool disable_trim)
     : Queue(bitrate, maxsize, eventlist, logger)
@@ -35,12 +38,26 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
     _queuesize_high = _queuesize_low = 0;
     _queuesize_high_watermark = 0;
     _serv = QUEUE_INVALID;
+
+    // Initialize statistics variables
+    _w = 0.0;
+    _we = 0.0;
+
+    // Create the stats timer
+    _stats_timer = new QueueStatsTimer(this, eventlist);
+
     stringstream ss;
     ss << "compqueue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
     _nodename = ss.str();
     _queue_id = global_queue_id++;
     if (_queue_id == DEBUG_QUEUE_ID)
         cout << "queueid " << _queue_id << " bitrate " << bitrate/1000000 << "Mb/s," << endl;
+}
+
+CompositeQueue::~CompositeQueue()
+{
+    // Delete the stats timer
+    delete _stats_timer;
 }
 
 void CompositeQueue::beginService(){
@@ -104,17 +121,23 @@ void CompositeQueue::completeService(){
                 uint32_t ecn_notify_flow_id = uec_pkt->get_sink_flow_id();
                 
                 if (ecn_notify_dst != UINT32_MAX && ecn_notify_flow_id != 0) {
+                    double we_w_ratio = (_w > 0) ? (_we / _w) : 0;
                     UecEcnNotifyPacket* ecn_notify = UecEcnNotifyPacket::newpkt(
                         pkt->flow(), ecn_notify_dst,
                         ecn_notify_flow_id, pkt->pathid(),
-                        _queuesize_low, _queuesize_high, _ecn_tag
+                        _queuesize_low, _queuesize_high, _ecn_tag,
+                        we_w_ratio
                     );
                     _switch->receivePacket(*ecn_notify);
                     
-                    cout << "[ECN Notify] queue_id=" << _queue_id 
-                        << " _queuesize_low=" << _queuesize_low 
+                    
+                    cout << "[ECN Notify] queue_id=" << _queue_id
+                        << " _queuesize_low=" << _queuesize_low
                         << " _queuesize_high=" << _queuesize_high
                         << " ecn_tag=" << _ecn_tag
+                        << " w=" << _w
+                        << " we=" << _we
+                        << " we_w_ratio=" << we_w_ratio
                         << endl;
                 }
             }
@@ -338,4 +361,72 @@ void CompositeQueue::receivePacket(Packet& pkt)
 
 mem_b CompositeQueue::queuesize() const {
     return _queuesize_low + _queuesize_high;
+}
+
+// QueueStatsTimer implementation
+QueueStatsTimer::QueueStatsTimer(CompositeQueue* queue, EventList& eventlist)
+    : EventSource(eventlist, "QueueStatsTimer"), _queue(queue)
+{
+    _interval = 10000;  // 10 microseconds in picoseconds
+    _next_stats_time = eventlist.now() + _interval;
+
+    // Initialize we to bandwidth * RTT (BDP) during construction
+    // we represents the bandwidth-delay product in bytes
+    linkspeed_bps bitrate = _queue->_bitrate;
+    simtime_picosec rtt = CompositeQueue::getNetworkRtt();
+    // BDP = bitrate * RTT / 8 (convert bits to bytes)
+    double bdp = timeAsSec(rtt) * (bitrate / 8.0);
+    // Add 4KB to we
+    _queue->setWe(bdp + 4096);
+
+    // Initialize previous queue depth
+    _last_q_low = _queue->_queuesize_low;
+
+    eventlist.sourceIsPending(*this, _next_stats_time);
+}
+
+void QueueStatsTimer::doNextEvent()
+{
+    // Get current simulation time
+    simtime_picosec now = eventlist().now();
+
+    // Read queue depth from the queue
+    mem_b q_low = _queue->_queuesize_low;
+
+    // Get queue parameters
+    linkspeed_bps bitrate = _queue->_bitrate;
+    simtime_picosec rtt = CompositeQueue::getNetworkRtt();
+
+    // Calculate dq/dt (queue depth change rate in bytes/second)
+    // dt is the fixed sampling interval
+    double dt = timeAsSec(_interval);  // seconds
+    double dq = q_low - _last_q_low;  // queue depth change in bytes
+    double dq_dt = dq / dt;  // bytes per second
+
+    // Convert bitrate to bytes per second
+    double bitrate_bytes_per_sec = bitrate / 8.0;
+
+    // Calculate w using the formula: (dq/dt + bitrate) * (q/bitrate + rtt)
+    // Term 1: (dq/dt + bitrate)
+    double term1 = dq_dt + bitrate_bytes_per_sec;
+
+    // Term 2: (q/bitrate + rtt)
+    double q_over_bitrate = 0.0;
+    if (bitrate_bytes_per_sec > 0) {
+        q_over_bitrate = q_low / bitrate_bytes_per_sec;
+    }
+    double term2 = q_over_bitrate + timeAsSec(rtt);
+
+    // Final w value
+    double w = term1 * term2;
+
+    // Update the queue's w value
+    _queue->setW(w);
+
+    // Update previous queue depth for next iteration
+    _last_q_low = q_low;
+
+    // Schedule next stats event
+    _next_stats_time = now + _interval;
+    eventlist().sourceIsPending(*this, _next_stats_time);
 }

@@ -18,11 +18,30 @@
 #include "network.h"
 #include "loggertypes.h"
 
+class CompositeQueue;  // Forward declaration
+
+class QueueStatsTimer : public EventSource {
+public:
+    QueueStatsTimer(CompositeQueue* queue, EventList& eventlist);
+    virtual void doNextEvent();
+    bool isTraffic() { return false; };  // Not a traffic event, won't block simulation end
+
+private:
+    CompositeQueue* _queue;
+    simtime_picosec _interval;
+    simtime_picosec _next_stats_time;
+
+    // Previous queue depth for calculating change rate
+    mem_b _last_q_low;
+};
+
 class CompositeQueue : public Queue {
+    friend class QueueStatsTimer;  // Allow QueueStatsTimer to access private members
  public:
-    CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, 
-                   EventList &eventlist, QueueLogger* logger, 
+    CompositeQueue(linkspeed_bps bitrate, mem_b maxsize,
+                   EventList &eventlist, QueueLogger* logger,
                    uint16_t trim_size, bool disable_trim=false);
+    virtual ~CompositeQueue();
     virtual void receivePacket(Packet& pkt);
     virtual void doNextEvent();
     // should really be private, but loggers want to see
@@ -57,6 +76,16 @@ class CompositeQueue : public Queue {
 
     void set_ecn_tag(int ecn_tag) { _ecn_tag = ecn_tag; }
 
+    // Getters and setters for w and we (used by QueueStatsTimer)
+    double getW() const { return _w; }
+    double getWe() const { return _we; }
+    void setW(double w) { _w = w; }
+    void setWe(double we) { _we = we; }
+
+    // Static network RTT - shared across all queues
+    static void setNetworkRtt(simtime_picosec rtt) { _network_rtt = rtt; }
+    static simtime_picosec getNetworkRtt() { return _network_rtt; }
+
     int _num_packets;
     int _num_headers; // only includes data packets stripped to headers, not acks or nacks
     int _num_acks;
@@ -90,6 +119,16 @@ class CompositeQueue : public Queue {
     int _queue_id;
     CircularBuffer<Packet*> _enqueued_low;
     CircularBuffer<Packet*> _enqueued_high;
+
+    // Statistics variables (updated by QueueStatsTimer)
+    double _w;
+    double _we;
+
+    // Pointer to the stats timer (owned by this queue)
+    QueueStatsTimer* _stats_timer;
+
+    // Static network RTT - shared across all queues
+    static simtime_picosec _network_rtt;
 };
 
 #endif

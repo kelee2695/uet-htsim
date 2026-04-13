@@ -384,7 +384,8 @@ class UecEcnNotifyPacket : public UecBasePacket {
 public:
     inline static UecEcnNotifyPacket* newpkt(PacketFlow& flow,
                                               uint32_t dst, flowid_t flow_id, uint32_t path_id,
-                                              mem_b queue_size_low, mem_b queue_size_high, int ecn_tag) {
+                                              mem_b queue_size_low, mem_b queue_size_high, int ecn_tag,
+                                              double we_w_ratio = 0.0) {
         UecEcnNotifyPacket* p = _packetdb.allocPacket();
         p->set_attrs(flow, ACKSIZE, 0);
         // Note: No set_route() call here. ECN notification packets don't have a predefined route.
@@ -401,6 +402,7 @@ public:
         p->_queue_size_low = queue_size_low;
         p->_queue_size_high = queue_size_high;
         p->_ecn_tag = ecn_tag;
+        p->_we_w_ratio = we_w_ratio;
         p->_ev = path_id;  // Store the data packet's path_id for congestion control
         return p;
     }
@@ -413,6 +415,7 @@ public:
     inline mem_b queue_size_low() const { return _queue_size_low; }
     inline mem_b queue_size_high() const { return _queue_size_high; }
     inline int ecn_tag() const { return _ecn_tag; }
+    inline double we_w_ratio() const { return _we_w_ratio; }
     inline uint32_t ev() const { return _ev; }  // Return the data packet's path_id
 
     virtual PktPriority priority() const { return Packet::PRIO_HI; }
@@ -424,6 +427,7 @@ protected:
     mem_b _queue_size_low;
     mem_b _queue_size_high;
     int _ecn_tag;
+    double _we_w_ratio;
     uint32_t _ev;  // Path ID of the data packet that triggered ECN (for congestion control)
     static PacketDB<UecEcnNotifyPacket> _packetdb;
 };
