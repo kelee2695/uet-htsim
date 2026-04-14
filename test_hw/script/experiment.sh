@@ -42,9 +42,9 @@ run_one() {
         mv "$result" "$dir/result.txt"
         [[ -f "$logf" ]] && mv "$logf" "$dir/result.log"
         [[ -f "$dir/result.log" ]] && "$PARSE_OUTPUT" "$dir/result.log" -ascii > "$dir/result_parsed.log" 2>&1
-        python3 "$SCRIPT_DIR/extract_cwnd.py" -i "$dir/result.txt" -o "$dir/cwnd_info.txt" >/dev/null 2>&1
         python3 "$SCRIPT_DIR/extract_flow_mapping.py" -i "$dir/result.txt" -o "$dir/cwnd_flow_map.txt" >/dev/null 2>&1
-        python3 "$SCRIPT_DIR/extract_cwnd_change.py" -i "$dir/cwnd_info.txt" -o "$dir/cwnd_change.csv" -m "$dir/cwnd_flow_map.txt" >/dev/null 2>&1
+        python3 "$SCRIPT_DIR/analyze_cwnd.py" -i "$dir/result.txt" -m "$dir/cwnd_flow_map.txt" -o "$dir/cwnd_change.csv" -e "$dir/cwnd_events.txt" >/dev/null 2>&1
+        python3 "$SCRIPT_DIR/plot_cwnd.py" -i "$dir/cwnd_change.csv" -o "$dir/cwnd_plot.png" -n 5 >/dev/null 2>&1
         python3 "$SCRIPT_DIR/analyze_send_rate.py" -i "$dir/result.txt" -o "$dir/send_rate_per_flow.csv" -n "$dir/send_rate_per_node.csv" >/dev/null 2>&1
         [[ -f "$dir/result_parsed.log" ]] && python3 "$SCRIPT_DIR/analyze_receive_rate.py" -i "$dir/result_parsed.log" -o "$dir/receive_rate.csv" >/dev/null 2>&1
         echo "S:$name" >> "$STATUS_FILE"

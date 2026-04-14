@@ -42,6 +42,7 @@ bool UecSrc::_receiver_based_cc = false;
 bool UecSink::_oversubscribed_cc = false; // can only be enabled when receiver_based_cc is set to true
 
 UecSrc::Sender_CC UecSrc::_sender_cc_algo = UecSrc::NSCC;
+bool UecSrc::_enable_cwnd_log = false;  // 默认关闭窗口日志
 
 /* 
     The following variable values are not default values, there are initializer values. The actual
@@ -172,17 +173,28 @@ void UecSrc::initNscc(mem_b cwnd, simtime_picosec peer_rtt) {
     setMaxWnd(1.5*_bdp);
     setConfiguredMaxWnd(1.5*_bdp);
 
+    mem_b init_cwnd_before = _cwnd;
     if (cwnd == 0) {
         _cwnd = _maxwnd;
     } else {
         _cwnd = cwnd;
     }
 
+    // NSCC: 记录初始化
+    if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+        cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+             << " INIT " << init_cwnd_before << "->" << _cwnd
+             << " initial_cwnd=" << _cwnd << " maxwnd=" << _maxwnd << endl;
+    }
+
     // Z-INCAST: 如果是Z-INCAST算法，计算b值
     if (_sender_cc_algo == Z_INCAST) {
         _z_incast_b = _cwnd / _z_incast_n;
-        cout << " Z-INCAST: initial_cwnd=" << _cwnd << " N=" << _z_incast_n
-             << " b=" << _z_incast_b << endl;
+        if (_enable_cwnd_log) {
+            cout << "[Z-INCAST-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " INIT " << init_cwnd_before << "->" << _cwnd
+                 << " initial_cwnd=" << _cwnd << " N=" << _z_incast_n << " b=" << _z_incast_b << endl;
+        }
     }
 
     cout << "Initialize per-instance NSCC parameters:"
@@ -1173,11 +1185,34 @@ bool UecSrc::can_send_NSCC(mem_b pkt_size) {
 }
 
 void UecSrc::set_cwnd_bounds() {
-    if (_cwnd < _min_cwnd)
+    mem_b before = _cwnd;
+    if (_cwnd < _min_cwnd) {
         _cwnd = _min_cwnd;
+        // Z-INCAST: 记录边界调整（下限）
+        if (_enable_cwnd_log && _sender_cc_algo == Z_INCAST) {
+            cout << "[Z-INCAST-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " BOUNDS_MIN " << before << "->" << _cwnd << endl;
+        }
+        // NSCC: 记录边界调整（下限）
+        if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+            cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " BOUNDS_MIN " << before << "->" << _cwnd << endl;
+        }
+    }
 
-    if (_cwnd > _maxwnd)
+    if (_cwnd > _maxwnd) {
         _cwnd = _maxwnd;
+        // Z-INCAST: 记录边界调整（上限）
+        if (_enable_cwnd_log && _sender_cc_algo == Z_INCAST) {
+            cout << "[Z-INCAST-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " BOUNDS_MAX " << before << "->" << _cwnd << endl;
+        }
+        // NSCC: 记录边界调整（上限）
+        if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+            cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " BOUNDS_MAX " << before << "->" << _cwnd << endl;
+        }
+    }
 }
 
 bool UecSrc::quick_adapt(bool is_loss, bool skip, simtime_picosec delay) {
@@ -1213,6 +1248,12 @@ bool UecSrc::quick_adapt(bool is_loss, bool skip, simtime_picosec delay) {
             _cwnd = max(_achieved_bytes, _min_cwnd); //* _qa_scaling;
             _nscc_overall_stats.dec_quick_bytes += before - _cwnd;
             _nscc_fulfill_stats.dec_quick_bytes += before - _cwnd;
+            // NSCC: 记录快速适应
+            if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+                cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " QUICK_ADAPT " << before << "->" << _cwnd
+                     << " is_loss=" << is_loss << " achieved=" << _achieved_bytes << endl;
+            }
 
             if (_flow.flow_id() == _debug_flowid) {
                 cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
@@ -1264,7 +1305,18 @@ void UecSrc::fast_increase(uint32_t newly_acked_bytes,simtime_picosec delay){
             _cwnd += newly_acked_bytes * _fi_scale;
             _nscc_overall_stats.inc_fast_bytes += _cwnd - before;
             _nscc_fulfill_stats.inc_fast_bytes += _cwnd - before;
-
+            // Z-INCAST: 记录快速增加
+            if (_enable_cwnd_log && _sender_cc_algo == Z_INCAST) {
+                cout << "[Z-INCAST-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " FAST_INC " << before << "->" << _cwnd
+                     << " newly_acked=" << newly_acked_bytes << " fi_scale=" << _fi_scale << endl;
+            }
+            // NSCC: 记录快速增加
+            if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+                cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " FAST_INC " << before << "->" << _cwnd
+                     << " newly_acked=" << newly_acked_bytes << " fi_scale=" << _fi_scale << endl;
+            }
             _increase = true;
             return;
         }
@@ -1286,7 +1338,12 @@ void UecSrc::multiplicative_decrease() {
             _cwnd = max(_cwnd, _min_cwnd);
             _nscc_overall_stats.dec_multi_bytes += before - _cwnd;
             _nscc_fulfill_stats.dec_multi_bytes += before - _cwnd;
-
+            // NSCC: 记录乘性减少
+            if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+                cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " MULTI_DEC " << before << "->" << _cwnd
+                     << " avg_delay=" << timeAsUs(avg_delay) << " gamma=" << _gamma << endl;
+            }
             _last_dec_time = eventlist().now();
         }
     }
@@ -1295,7 +1352,20 @@ void UecSrc::multiplicative_decrease() {
 void UecSrc::fulfill_adjustment(){
     assert(_bdp > 0);
 
+    mem_b before = _cwnd;
     _cwnd += _inc_bytes / _cwnd;
+    // Z-INCAST: 记录累积增量应用
+    if (_enable_cwnd_log && _sender_cc_algo == Z_INCAST && _inc_bytes > 0) {
+        cout << "[Z-INCAST-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+             << " FULFILL_INC " << before << "->" << _cwnd
+             << " _inc_bytes=" << _inc_bytes << endl;
+    }
+    // NSCC: 记录累积增量应用
+    if (_enable_cwnd_log && _sender_cc_algo == NSCC && _inc_bytes > 0) {
+        cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+             << " FULFILL_INC " << before << "->" << _cwnd
+             << " _inc_bytes=" << _inc_bytes << endl;
+    }
 
     _nscc_fulfill_stats.inc_fair_bytes /= _cwnd;
     _nscc_fulfill_stats.inc_prop_bytes /= _cwnd;
@@ -1304,9 +1374,22 @@ void UecSrc::fulfill_adjustment(){
     _nscc_overall_stats.inc_prop_bytes += _nscc_fulfill_stats.inc_prop_bytes;
 
     if ((eventlist().now() - _last_adjust_time) >= _adjust_period_threshold) {
+        mem_b before_eta = _cwnd;
         _cwnd += _eta;
         _nscc_overall_stats.inc_eta_bytes += _eta;
         _nscc_fulfill_stats.inc_eta_bytes += _eta;
+        // Z-INCAST: 记录保底增长
+        if (_enable_cwnd_log && _sender_cc_algo == Z_INCAST) {
+            cout << "[Z-INCAST-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " ETA_INC " << before_eta << "->" << _cwnd
+                 << " _eta=" << _eta << endl;
+        }
+        // NSCC: 记录保底增长
+        if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+            cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " ETA_INC " << before_eta << "->" << _cwnd
+                 << " _eta=" << _eta << endl;
+        }
         _last_adjust_time = eventlist().now();
     }
 
@@ -1416,7 +1499,14 @@ void UecSrc::updateCwndOnNack_NSCC(bool skip, mem_b nacked_bytes, bool last_hop)
     }
 
     if (adjust_cwnd && (!_receiver_based_cc || !last_hop)) {
+        mem_b before = _cwnd;
         _cwnd -= nacked_bytes;
+        // NSCC: 记录NACK减窗
+        if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+            cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " NACK_DEC " << before << "->" << _cwnd
+                 << " nacked_bytes=" << nacked_bytes << endl;
+        }
         set_cwnd_bounds();
     }
 }
@@ -1441,7 +1531,46 @@ void UecSrc::dontProcessEcnNotify(const UecEcnNotifyPacket& pkt) {
 }
 
 void UecSrc::updateCwndOnAck_Z_INCAST(bool skip, simtime_picosec delay, mem_b newly_acked_bytes) {
-    // Z-INCAST: ACK时不调整窗口（空操作）
+    // Z-INCAST: 使用NSCC的增窗口逻辑（只保留无ECN的情况）
+    // skip=false表示无ECN标记，此时增加窗口
+    if (!skip) {
+        // 延迟高时：公平增加
+        if (delay >= _target_Qdelay) {
+            fair_increase(newly_acked_bytes);
+            if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+                cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " Z_INCAST fair_increase _cwnd " << _cwnd
+                     << " newly_acked_bytes " << newly_acked_bytes << endl;
+            }
+        }
+        // 延迟低时：比例增加（包含快速增加）
+        else {
+            proportional_increase(newly_acked_bytes, delay);
+            if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+                cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " Z_INCAST proportional_increase _cwnd " << _cwnd << endl;
+            }
+        }
+
+        // 累积接收字节数
+        _received_bytes += newly_acked_bytes;
+
+        // 检查是否需要调用fulfill_adjustment
+        if (_received_bytes > _adjust_bytes_threshold ||
+            eventlist().now() - _last_adjust_time > _adjust_period_threshold) {
+            if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+                cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " Z_INCAST fulfill_adjustment _cwnd " << _cwnd
+                     << " _inc_bytes " << _inc_bytes << endl;
+            }
+            fulfill_adjustment();
+            if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+                cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " Z_INCAST after fulfill_adjustment _cwnd " << _cwnd << endl;
+            }
+        }
+    }
+    // skip=true时有ECN标记，不处理（由processEcnNotify_Z_INCAST处理减窗口）
 }
 
 void UecSrc::updateCwndOnNack_Z_INCAST(bool skip, mem_b nacked_bytes, bool last_hop) {
@@ -1478,6 +1607,13 @@ void UecSrc::processEcnNotify_Z_INCAST(const UecEcnNotifyPacket& pkt) {
 
     // 确保窗口在合理范围内
     set_cwnd_bounds();
+    
+    // Z-INCAST: 统一格式日志
+    if (_enable_cwnd_log) {
+        cout << "[Z-INCAST-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+             << " ECN_DEC " << wo << "->" << _cwnd
+             << " we_w_ratio=" << we_w_ratio << " a=" << a << " b=" << b << endl;
+    }
 
     if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
         cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()

@@ -113,9 +113,14 @@ void CompositeQueue::completeService(){
         bool ecn = decide_ECN();
         //ECN mark on deque
         if (ecn) {
-            pkt->set_flags(pkt->flags() | _ecn_tag);
+            uint32_t old_flags = pkt->flags();
+            // 如果已经设置了相同的ECN标记，不再发送ECN notify
+            bool already_marked = (old_flags & _ecn_tag) == _ecn_tag;
+            // bool already_marked = false;
             
-            if (pkt->type() == UECDATA) {
+            pkt->set_flags(old_flags | _ecn_tag);
+            
+            if (!already_marked && pkt->type() == UECDATA) {
                 UecDataPacket* uec_pkt = static_cast<UecDataPacket*>(pkt);
                 uint32_t ecn_notify_dst = uec_pkt->get_src();
                 uint32_t ecn_notify_flow_id = uec_pkt->get_sink_flow_id();

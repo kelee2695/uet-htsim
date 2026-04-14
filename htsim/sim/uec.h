@@ -217,6 +217,9 @@ public:
     enum Sender_CC { DCTCP, NSCC, CONSTANT, Z_INCAST};
     static Sender_CC _sender_cc_algo;
 
+    // 窗口日志开关
+    static bool _enable_cwnd_log;
+
     static bool _disable_quick_adapt;
     static uint8_t _qa_gate;
 

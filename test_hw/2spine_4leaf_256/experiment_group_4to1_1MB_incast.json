@@ -11,8 +11,9 @@
         "-logtime_us", "20",
         "-sender_cc_algo", "z_incast",
         "-z_incast_alpha", "0.9",
-        "-z_incast_n", "32",
+        "-z_incast_n", "64",
         "-queue_type", "composite",
+        "-enable_cwnd_log",
         "-end", "0",
         "-q", "300"
       ],
@@ -30,6 +31,7 @@
         "-logtime_us", "20",
         "-sender_cc_algo", "nscc",
         "-queue_type", "composite",
+        "-enable_cwnd_log",
         "-end", "0",
         "-q", "300"
       ],

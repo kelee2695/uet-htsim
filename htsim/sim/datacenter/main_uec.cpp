@@ -326,6 +326,9 @@ int main(int argc, char **argv) {
             } else if (!strcmp(argv[i+1], "queue_usage")) {
                 cout << "logging queue usage\n";
                 log_queue_usage = true;
+            } else if (!strcmp(argv[i+1], "cwnd")) {
+                cout << "logging cwnd changes\n";
+                UecSrc::_enable_cwnd_log = true;
             } else {
                 exit_error(argv[0]);
             }
