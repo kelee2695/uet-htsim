@@ -100,6 +100,7 @@ class CompositeQueue : public Queue {
     void beginService(); // start serving the item at the head of the queue
     void completeService(); // wrap up serving the item at the head of the queue
     bool decide_ECN();
+    void mark_ECN_on_enqueue(Packet& pkt); // 在入队时处理 ECN 标记（提前标记以加快响应速度）
 
     bool _disable_trim;
 
