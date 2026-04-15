@@ -168,6 +168,23 @@ class Packet {
 
     //    void set_detour(PacketSink* n, int rewind) {_detour = n;_nexthop -= rewind;}
     
+    // ========== 在网时延统计 ==========
+    // 设置/获取数据包进入 stor (source ToR) 队列的时间
+    inline void set_stor_enqueue_time(simtime_picosec t) { _stor_enqueue_time = t; }
+    inline simtime_picosec get_stor_enqueue_time() const { return _stor_enqueue_time; }
+    
+    // 设置/获取数据包离开 dtor (destination ToR) 队列的时间
+    inline void set_dtor_dequeue_time(simtime_picosec t) { _dtor_dequeue_time = t; }
+    inline simtime_picosec get_dtor_dequeue_time() const { return _dtor_dequeue_time; }
+    
+    // 计算在网时延 (从 stor 入队到 dtor 出队)
+    inline simtime_picosec get_network_delay() const { 
+        if (_dtor_dequeue_time > _stor_enqueue_time)
+            return _dtor_dequeue_time - _stor_enqueue_time;
+        return 0;
+    }
+    // ==================================
+    
     string str() const;
  protected:
     void set_attrs(PacketFlow& flow, int pkt_size, packetid_t id);
@@ -207,6 +224,11 @@ class Packet {
     static PacketFlow _defaultFlow;
     LosslessInputQueue* _ingressqueue;
     uint32_t _path_len; // length of the path in hops - used in BCube priority routing with NDP
+    
+    // ========== 在网时延统计 ==========
+    simtime_picosec _stor_enqueue_time = 0;  // 数据包进入 stor (source ToR) 队列的时间
+    simtime_picosec _dtor_dequeue_time = 0;  // 数据包离开 dtor (destination ToR) 队列的时间
+    // ==================================
 };
 
 class PacketSink {

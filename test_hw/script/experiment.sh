@@ -47,6 +47,8 @@ run_one() {
         python3 "$SCRIPT_DIR/plot_cwnd.py" -i "$dir/cwnd_change.csv" -o "$dir/cwnd_plot.png" -n 5 >/dev/null 2>&1
         python3 "$SCRIPT_DIR/analyze_send_rate.py" -i "$dir/result.txt" -o "$dir/send_rate_per_flow.csv" -n "$dir/send_rate_per_node.csv" >/dev/null 2>&1
         [[ -f "$dir/result_parsed.log" ]] && python3 "$SCRIPT_DIR/analyze_receive_rate.py" -i "$dir/result_parsed.log" -o "$dir/receive_rate.csv" >/dev/null 2>&1
+        # 数据包在网时延统计
+        [[ -f "$dir/cwnd_flow_map.txt" ]] && python3 "$SCRIPT_DIR/analyze_network_delay.py" "$dir/result.txt" "$dir/cwnd_flow_map.txt" "$dir/network_delay_stats.csv" >/dev/null 2>&1
         echo "S:$name" >> "$STATUS_FILE"
     else
         echo "F:$name" >> "$STATUS_FILE"

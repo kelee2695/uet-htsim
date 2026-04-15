@@ -187,6 +187,31 @@ void CompositeQueue::completeService(){
         assert(0);
     }
     
+    // ========== 在网时延统计 ==========
+    // 只统计低优先级队列的数据包（高优先级队列是 ACK/NACK/Header 等控制包）
+    // 检查是否是 dtor 交换机的发送队列 (LS->DST，即 ToR 到 Server 的下行队列)
+    // 队列名称格式为 "LS{X}->DST{Y}(Z)"
+    if (_serv == QUEUE_LOW && 
+        _nodename.find("LS") != string::npos && 
+        _nodename.find("->DST") != string::npos) {
+        // 这是 dtor 交换机的发送队列的低优先级数据包，记录数据包离开 dtor 的时间
+        pkt->set_dtor_dequeue_time(eventlist().now());
+        
+        // 计算并输出在网时延
+        simtime_picosec network_delay = pkt->get_network_delay();
+        if (network_delay > 0) {
+            // 可以选择输出到文件或存储到统计结构中
+            // 这里先输出到控制台，你可以根据需要修改
+            cout << "[NetworkDelay] pkt_id=" << pkt->id() 
+                 << " flow_id=" << pkt->flow_id()
+                 << " delay_us=" << timeAsUs(network_delay) 
+                 << " stor_time=" << timeAsUs(pkt->get_stor_enqueue_time())
+                 << " dtor_time=" << timeAsUs(pkt->get_dtor_dequeue_time())
+                 << endl;
+        }
+    }
+    // ==================================
+    
     pkt->flow().logTraffic(*pkt,*this,TrafficLogger::PKT_DEPART);
     pkt->sendOn();
 
@@ -251,6 +276,19 @@ void CompositeQueue::receivePacket(Packet& pkt)
              << _queuesize_low * 8 / ((_bitrate / 1000000.0)) << " _queueid " << _queue_id << " switch " << _switch->getID() 
              <<" flowid " << pkt.flow_id() << " ev " << pkt.pathid()<< endl;
     }
+    
+    // ========== 在网时延统计 ==========
+    // 只统计低优先级的数据包（非 header_only 的数据包）
+    // 检查是否是 stor 交换机的发送队列 (LS->US，即 ToR 到 Agg 的上行队列)
+    // 队列名称格式为 "LS{X}->US{Y}(Z)"
+    if (!pkt.header_only() &&
+        _nodename.find("LS") != string::npos && 
+        _nodename.find("->US") != string::npos) {
+        // 这是 stor 交换机的发送队列，记录数据包进入 stor 的时间
+        pkt.set_stor_enqueue_time(eventlist().now());
+    }
+    // ==================================
+    
     pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_ARRIVE);
     if (_logger) _logger->logQueue(*this, QueueLogger::PKT_ARRIVE, pkt);
 
