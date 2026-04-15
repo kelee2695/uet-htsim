@@ -12,6 +12,12 @@ static int global_queue_id=0;
 // Static network RTT - shared across all queues
 simtime_picosec CompositeQueue::_network_rtt = 0;
 
+// Static ECN notify echo back control - default disabled
+bool CompositeQueue::_enable_ecn_notify = false;
+
+// Static ECN marking timing control - default dequeue (false)
+bool CompositeQueue::_ecn_mark_on_enqueue = false;
+
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, 
                                QueueLogger* logger, uint16_t trim_size, bool disable_trim)
     : Queue(bitrate, maxsize, eventlist, logger)
@@ -110,48 +116,8 @@ void CompositeQueue::completeService(){
         pkt = _enqueued_low.pop();
         _queuesize_low -= pkt->size();
 
-        /* 原有的出队时 ECN 标记逻辑已移至入队时处理（mark_ECN_on_enqueue）
-         * 保留此代码块用于对比和回滚
-         */
-        /*
-        bool ecn = decide_ECN();
-        //ECN mark on deque
-        if (ecn) {
-            uint32_t old_flags = pkt->flags();
-            // 如果已经设置了相同的ECN标记，不再发送ECN notify
-            bool already_marked = (old_flags & _ecn_tag) == _ecn_tag;
-            // bool already_marked = false;
-            
-            pkt->set_flags(old_flags | _ecn_tag);
-            
-            if (!already_marked && pkt->type() == UECDATA) {
-                UecDataPacket* uec_pkt = static_cast<UecDataPacket*>(pkt);
-                uint32_t ecn_notify_dst = uec_pkt->get_src();
-                uint32_t ecn_notify_flow_id = uec_pkt->get_sink_flow_id();
-                
-                if (ecn_notify_dst != UINT32_MAX && ecn_notify_flow_id != 0) {
-                    double we_w_ratio = (_w > 0) ? (_we / _w) : 0;
-                    UecEcnNotifyPacket* ecn_notify = UecEcnNotifyPacket::newpkt(
-                        pkt->flow(), ecn_notify_dst,
-                        ecn_notify_flow_id, pkt->pathid(),
-                        _queuesize_low, _queuesize_high, _ecn_tag,
-                        we_w_ratio
-                    );
-                    _switch->receivePacket(*ecn_notify);
-                    
-                    
-                    cout << "[ECN Notify] queue_id=" << _queue_id
-                        << " _queuesize_low=" << _queuesize_low
-                        << " _queuesize_high=" << _queuesize_high
-                        << " ecn_tag=" << _ecn_tag
-                        << " w=" << _w
-                        << " we=" << _we
-                        << " we_w_ratio=" << we_w_ratio
-                        << endl;
-                }
-            }
-        }
-        */
+        // 处理 ECN 标记（根据配置在入队或出队时）
+        mark_ECN(*pkt, false);  // false 表示出队时调用
         if (_queue_id == DEBUG_QUEUE_ID) {
             cout << timeAsUs(eventlist().now()) <<" name " <<_nodename <<" _queuesize_low " 
                 << _queuesize_low*8/((_bitrate/1000000.0)) <<" _queueid " << _queue_id << " switch " << _switch->getID() 
@@ -227,11 +193,15 @@ void CompositeQueue::doNextEvent() {
     completeService();
 }
 
-// 在入队时处理 ECN 标记的辅助函数
-void CompositeQueue::mark_ECN_on_enqueue(Packet& pkt) {
+// 处理 ECN 标记的辅助函数（入队或出队时调用）
+void CompositeQueue::mark_ECN(Packet& pkt, bool on_enqueue) {
+    // 检查当前调用时机是否与配置一致
+    // on_enqueue=true 表示当前在入队时调用，on_enqueue=false 表示在出队时调用
+    if (on_enqueue != _ecn_mark_on_enqueue) {
+        return;  // 时机不匹配，不执行标记
+    }
+
     // 使用 decide_ECN 函数判断是否需要标记 ECN
-    // 注意：此时 _queuesize_low 还未包含当前包（包未入队）
-    // 这与原逻辑（出队后）使用相同的判断标准
     bool ecn = decide_ECN();
     
     if (ecn) {
@@ -240,7 +210,8 @@ void CompositeQueue::mark_ECN_on_enqueue(Packet& pkt) {
         
         pkt.set_flags(old_flags | _ecn_tag);
         
-        if (!already_marked && pkt.type() == UECDATA) {
+        // 只在启用 ECN notify 回传时才发送通知包
+        if (_enable_ecn_notify && !already_marked && pkt.type() == UECDATA) {
             UecDataPacket* uec_pkt = static_cast<UecDataPacket*>(&pkt);
             uint32_t ecn_notify_dst = uec_pkt->get_src();
             uint32_t ecn_notify_flow_id = uec_pkt->get_sink_flow_id();
@@ -255,7 +226,8 @@ void CompositeQueue::mark_ECN_on_enqueue(Packet& pkt) {
                 );
                 _switch->receivePacket(*ecn_notify);
                 
-                cout << "[ECN Notify On Enqueue] queue_id=" << _queue_id
+                const char* timing_str = on_enqueue ? "On Enqueue" : "On Dequeue";
+                cout << "[ECN Notify " << timing_str << "] queue_id=" << _queue_id
                     << " _queuesize_low=" << _queuesize_low
                     << " _queuesize_high=" << _queuesize_high
                     << " ecn_tag=" << _ecn_tag
@@ -300,8 +272,8 @@ void CompositeQueue::receivePacket(Packet& pkt)
             // it might be full and we randomly chose an
             // enqueued packet to trim
             
-            // 在入队时处理 ECN 标记（提前到入队时）
-            mark_ECN_on_enqueue(pkt);
+            // 处理 ECN 标记（根据配置在入队或出队时）
+            mark_ECN(pkt, true);  // true 表示入队时调用
             
             if (_queuesize_low+pkt.size()>_maxsize){
                 // we're going to drop an existing packet from the queue

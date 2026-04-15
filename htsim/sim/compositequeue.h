@@ -86,6 +86,14 @@ class CompositeQueue : public Queue {
     static void setNetworkRtt(simtime_picosec rtt) { _network_rtt = rtt; }
     static simtime_picosec getNetworkRtt() { return _network_rtt; }
 
+    // ECN notify echo back control
+    static void setEnableEcnNotify(bool enable) { _enable_ecn_notify = enable; }
+    static bool getEnableEcnNotify() { return _enable_ecn_notify; }
+
+    // ECN marking timing control (enqueue vs dequeue)
+    static void setEcnMarkOnEnqueue(bool on_enqueue) { _ecn_mark_on_enqueue = on_enqueue; }
+    static bool getEcnMarkOnEnqueue() { return _ecn_mark_on_enqueue; }
+
     int _num_packets;
     int _num_headers; // only includes data packets stripped to headers, not acks or nacks
     int _num_acks;
@@ -100,7 +108,7 @@ class CompositeQueue : public Queue {
     void beginService(); // start serving the item at the head of the queue
     void completeService(); // wrap up serving the item at the head of the queue
     bool decide_ECN();
-    void mark_ECN_on_enqueue(Packet& pkt); // 在入队时处理 ECN 标记（提前标记以加快响应速度）
+    void mark_ECN(Packet& pkt, bool on_enqueue); // 处理 ECN 标记（根据时机参数决定行为）
 
     bool _disable_trim;
 
@@ -130,6 +138,12 @@ class CompositeQueue : public Queue {
 
     // Static network RTT - shared across all queues
     static simtime_picosec _network_rtt;
+
+    // Static ECN notify echo back control - shared across all queues
+    static bool _enable_ecn_notify;
+
+    // Static ECN marking timing control - shared across all queues
+    static bool _ecn_mark_on_enqueue;
 };
 
 #endif

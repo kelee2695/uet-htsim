@@ -402,6 +402,14 @@ int main(int argc, char **argv) {
             UecSrc::_enable_sleek = true;
             cout << "Using SLEEK, the sender-based fast loss recovery heuristic " << endl;
         }
+        else if (!strcmp(argv[i],"-enable_fastcn")){
+            CompositeQueue::setEnableEcnNotify(true);
+            cout << "FastCN (ECN notify) enabled" << endl;
+        }
+        else if (!strcmp(argv[i],"-ecn_enqueue")){
+            CompositeQueue::setEcnMarkOnEnqueue(true);
+            cout << "ECN marking on enqueue enabled (default: on dequeue)" << endl;
+        }
         else if (!strcmp(argv[i],"-ecn")){
             // fraction of queuesize, between 0 and 1
             param_ecn_set = true;
