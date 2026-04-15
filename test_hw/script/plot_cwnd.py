@@ -59,10 +59,10 @@ def plot_cwnd(csv_file, output_file, num_flows=5, seed=None):
         # 按时间排序
         flow_data = flow_data.sort_values('time')
         
-        # 只绘制散点（不绘制折线）
+        # 绘制细线折线（不描点）
         color = colors[idx % len(colors)]
-        ax.scatter(flow_data['time'], flow_data['cwnd_after'],
-                  label=flow_name, color=color, s=15, alpha=0.6, zorder=5)
+        ax.plot(flow_data['time'], flow_data['cwnd_after'],
+                label=flow_name, color=color, linewidth=0.8, alpha=0.7, zorder=5)
     
     # 设置图形属性
     ax.set_xlabel('Time (us)', fontsize=12)

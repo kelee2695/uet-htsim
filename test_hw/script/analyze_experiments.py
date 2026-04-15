@@ -214,7 +214,8 @@ def analyze_experiments(result_dir, output_dir='./figures/'):
     with open(csv_file, 'w') as f:
         f.write("Experiment,Connections,Actual_Connections,Mean_FCT_us,Min_FCT_us,Max_FCT_us,Median_FCT_us,")
         f.write("Mean_Throughput_Gbps,Min_Throughput_Gbps,Max_Throughput_Gbps,")
-        f.write("New_Pkts,Rtx_Pkts,Rts_Pkts,Bounced_Pkts,Acks,Nacks,Pulls_Pkts,Sleek_Pkts,Rtx_Rate_%\n")
+        f.write("New_Pkts,Rtx_Pkts,Rts_Pkts,Bounced_Pkts,Acks,Nacks,Pulls_Pkts,Sleek_Pkts,Rtx_Rate_%,")
+        f.write("Total_Bytes,CCT_us,Total_Bandwidth_Gbps\n")
         
         for exp_name, data in experiments_data.items():
             f.write(f"{exp_name},{data['connections']},{data['actual_connections']},")
@@ -233,10 +234,21 @@ def analyze_experiments(result_dir, output_dir='./figures/'):
             
             if data['new_pkts'] > 0:
                 rtx_rate = (data['rtx_pkts'] / data['new_pkts']) * 100
-                f.write(f"{rtx_rate:.2f}")
+                f.write(f"{rtx_rate:.2f},")
             else:
-                f.write("0")
+                f.write("0,")
             
+            # 计算总完成带宽 = 总流量 / CCT
+            total_bytes = sum(data['flow_sizes'].values()) if data['flow_sizes'] else 0
+            cct = max(data['fcts']) if data['fcts'] else 0  # Completion Time (最大FCT)
+            
+            if cct > 0:
+                # 总完成带宽 (Gbps) = (总字节数 * 8) / (CCT秒数) / 10^9
+                total_bandwidth_gbps = (total_bytes * 8) / (cct * 1e-6) / 1e9
+            else:
+                total_bandwidth_gbps = 0
+            
+            f.write(f"{total_bytes},{cct:.2f},{total_bandwidth_gbps:.2f}")
             f.write("\n")
     
     print(f"生成详细数据CSV: {csv_file}")

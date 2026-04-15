@@ -2,70 +2,14 @@
 import os
 import re
 import argparse
-from collections import defaultdict
-from datetime import datetime
+import matplotlib.pyplot as plt
+import numpy as np
 
-def classify_queue(name):
-    if not name:
-        return 'Unknown'
-    if '->DST' in name:
-        return 'ToR_Downlink'
-    elif '->LS_' in name:
-        return 'ToR_Downlink'
-    elif '->CS' in name:
-        return 'Agg_Uplink'
-    elif 'SRC' in name and '->LS' in name:
-        return 'Host_Uplink'
-    elif '->US' in name:
-        return 'ToR_Uplink'
-    return 'Unknown'
-
-def get_switch_info(name):
-    if not name:
-        return 'Unknown', 'Unknown'
-
-    tor_match = re.search(r'LS(\d+)', name)
-    agg_match = re.search(r'US(\d+)', name)
-    core_match = re.search(r'CS(\d+)', name)
-    host_match = re.search(r'DST(\d+)|SRC(\d+)', name)
-
-    if tor_match:
-        sw_type = 'ToR'
-        sw_id = f"LS{tor_match.group(1)}"
-    elif agg_match:
-        sw_type = 'Agg'
-        sw_id = f"US{agg_match.group(1)}"
-    elif core_match:
-        sw_type = 'Core'
-        sw_id = f"CS{core_match.group(1)}"
-    elif host_match:
-        sw_type = 'Host'
-        sw_id = 'Host'
-    else:
-        sw_type = 'Unknown'
-        sw_id = 'Unknown'
-
-    return sw_type, sw_id
-
-def get_queue_index(name):
-    if not name:
-        return -1
-    match = re.search(r'\((\d+)\)', name)
-    if match:
-        return int(match.group(1))
-    return -1
 
 def parse_log_file(filepath):
-    queue_max = {}
-    queue_min = {}
-    queue_last = {}
+    """解析日志文件，返回每个队列每次统计的累积到达包数"""
     queue_names = {}
-    queue_cumarr = {}
-    queue_cumdrop = {}
-
-    if not os.path.exists(filepath):
-        print(f"File not found: {filepath}")
-        return None
+    queue_samples = {}
 
     with open(filepath, 'r') as f:
         for line in f:
@@ -78,437 +22,278 @@ def parse_log_file(filepath):
             if name_match:
                 queue_names[queue_id] = name_match.group(1)
 
-            if 'Ev RANGE' in line:
-                match = re.search(r'LastQ (\d+) MinQ (\d+) MaxQ (\d+)', line)
+            if 'Ev CUM_TRAFFIC' in line:
+                time_match = re.search(r'^(\d+\.\d+)', line)
+                timestamp = float(time_match.group(1)) if time_match else 0.0
+                
+                match = re.search(r'CumArr (\d+)', line)
                 if match:
-                    lastq = int(match.group(1))
-                    minq = int(match.group(2))
-                    maxq = int(match.group(3))
-                    queue_last[queue_id] = lastq
-                    if queue_id not in queue_max or maxq > queue_max[queue_id]:
-                        queue_max[queue_id] = maxq
-                    if queue_id not in queue_min or minq < queue_min[queue_id]:
-                        queue_min[queue_id] = minq
+                    cum_arr = int(match.group(1))
+                    queue_samples.setdefault(queue_id, []).append((timestamp, cum_arr))
 
-            elif 'Ev CUM_TRAFFIC' in line:
-                match = re.search(r'CumArr (\d+) CumIdle (\d+) CumDrop (\d+)', line)
-                if match:
-                    cumarr = int(match.group(1))
-                    cumdrop = int(match.group(3))
-                    queue_cumarr[queue_id] = cumarr
-                    if queue_id not in queue_cumdrop:
-                        queue_cumdrop[queue_id] = cumdrop
-                    elif cumdrop > queue_cumdrop[queue_id]:
-                        queue_cumdrop[queue_id] = cumdrop
+    return {'names': queue_names, 'samples': queue_samples}
 
-    return {
-        'max': queue_max,
-        'min': queue_min,
-        'last': queue_last,
-        'names': queue_names,
-        'cumarr': queue_cumarr,
-        'cumdrop': queue_cumdrop
-    }
+
+def normalize_queue_name(name):
+    """统一队列名称格式：US0->LS_0(0) → US0->LS0(0)"""
+    return re.sub(r'LS_(\d+)', r'LS\1', name)
+
+
+def parse_queue_name(name):
+    """解析队列名，返回排序键 (leaf_id, type_order, target_id, queue_idx)"""
+    normalized = normalize_queue_name(name)
+    
+    patterns = [
+        (r'LS(\d+)->DST(\d+)\((\d+)\)', 0),   # LS->DST
+        (r'LS(\d+)->US(\d+)\((\d+)\)', 1),    # LS->US
+        (r'LS(\d+)->CS(\d+)\((\d+)\)', 2),    # LS->CS
+        (r'SRC(\d+)->LS(\d+)\((\d+)\)', 3),   # SRC->LS
+        (r'US(\d+)->LS(\d+)\((\d+)\)', 4),    # US->LS
+    ]
+    
+    for pattern, type_order in patterns:
+        match = re.search(pattern, normalized)
+        if match:
+            ids = [int(m) for m in match.groups()]
+            if type_order == 3:  # SRC->LS: (leaf_id, type, src_id, qidx)
+                return (ids[1], type_order, ids[0], ids[2])
+            elif type_order == 4:  # US->LS: (leaf_id, type, us_id, qidx)
+                return (ids[1], type_order, ids[0], ids[2])
+            else:  # LS->xxx: (leaf_id, type, target_id, qidx)
+                return (ids[0], type_order, ids[1], ids[2])
+    
+    return (9999, 99, 9999, 0)
+
+
+def calculate_jain_index(values):
+    """计算Jain公平指数: (sum(x_i))^2 / (n * sum(x_i^2))"""
+    n = len(values)
+    if n == 0 or sum(values) == 0:
+        return 1.0  # 如果没有数据或全为0，视为完全公平
+    
+    sum_x = sum(values)
+    sum_x2 = sum(x ** 2 for x in values)
+    
+    if sum_x2 == 0:
+        return 1.0
+    
+    jain = (sum_x ** 2) / (n * sum_x2)
+    return jain
+
+
+def generate_csv(exp_dir, data):
+    """生成CSV文件：每时间片新增包数 + Jain指数 + 总包数"""
+    names = data['names']
+    samples = data['samples']
+    
+    # 统一队列名并去重
+    queue_names = list({normalize_queue_name(names[qid]) for qid in samples if qid in names})
+    queue_names.sort(key=parse_queue_name)
+    
+    # 筛选 LS0->US0 和 LS0->US1 的队列（共64列）
+    us_queues = [q for q in queue_names if q.startswith('LS0->US0(') or q.startswith('LS0->US1(')]
+    
+    # 收集所有时间戳
+    timestamps = sorted({ts for qid in samples for ts, _ in samples[qid]})
+    
+    # 构建数据: timestamp -> {queue_name -> cum_arr}
+    data_by_time = {ts: {} for ts in timestamps}
+    for qid, sample_list in samples.items():
+        if qid not in names:
+            continue
+        qname = normalize_queue_name(names[qid])
+        for ts, cum_arr in sample_list:
+            data_by_time[ts][qname] = data_by_time[ts].get(qname, 0) + cum_arr
+    
+    # 计算区间包数和总包数
+    interval_data = []
+    last_vals = {}
+    totals = {}
+    
+    for ts in timestamps:
+        row = {'timestamp': ts}
+        for qname in queue_names:
+            cum = data_by_time[ts].get(qname, 0)
+            interval = cum - last_vals.get(qname, 0)
+            row[qname] = interval
+            last_vals[qname] = cum
+            totals[qname] = cum
+        
+        # 计算 LS0->US0 和 LS0->US1 的Jain指数
+        us_values = [row.get(q, 0) for q in us_queues]
+        row['Jain_Index'] = calculate_jain_index(us_values)
+        
+        interval_data.append(row)
+    
+    # 写入CSV
+    output_file = os.path.join(exp_dir, 'queue_traffic.csv')
+    with open(output_file, 'w') as f:
+        # 表头：所有队列名 + Jain_Index
+        f.write('Timestamp,' + ','.join(queue_names) + ',Jain_Index\n')
+        
+        # 数据行
+        for row in interval_data:
+            line = str(row['timestamp']) + ',' + ','.join(str(row.get(q, 0)) for q in queue_names)
+            line += ',' + str(round(row['Jain_Index'], 4))
+            f.write(line + '\n')
+        
+        # 总包数行（也计算Jain指数）
+        total_values = [totals.get(q, 0) for q in us_queues]
+        total_jain = calculate_jain_index(total_values)
+        total_line = 'Total,' + ','.join(str(totals.get(q, 0)) for q in queue_names) + ',' + str(round(total_jain, 4)) + '\n'
+        f.write(total_line)
+    
+    print(f"Saved: {output_file}")
+    return output_file
+
 
 def analyze_experiment(exp_dir, exp_name):
-    result_log = os.path.join(exp_dir, 'result_parsed.log')
-    if not os.path.exists(result_log):
+    """分析单个实验"""
+    log_file = os.path.join(exp_dir, 'result_parsed.log')
+    if not os.path.exists(log_file):
         print(f"Skip {exp_name}: no result_parsed.log")
         return None
 
-    data = parse_log_file(result_log)
+    data = parse_log_file(log_file)
     if not data:
         return None
 
-    queues_by_switch = {}
-    queues_by_type = defaultdict(list)
-    queues_by_switch_type = {}
+    output_file = generate_csv(exp_dir, data)
+    return {'name': exp_name, 'output_file': output_file}
 
-    for qid, maxq in data['max'].items():
-        name = data['names'].get(qid, f"ID_{qid}")
-        sw_type, sw_id = get_switch_info(name)
-        direction = classify_queue(name)
-        queue_idx = get_queue_index(name)
 
-        lastq = data['last'].get(qid, 0)
-        minq = data['min'].get(qid, 0)
-        cumarr = data['cumarr'].get(qid, 0)
-        cumdrop = data['cumdrop'].get(qid, 0)
-
-        queue_info = {
-            'id': qid,
-            'name': name,
-            'type': direction,
-            'switch_type': sw_type,
-            'switch_id': sw_id,
-            'queue_idx': queue_idx,
-            'maxq': maxq,
-            'lastq': lastq,
-            'minq': minq,
-            'cumarr': cumarr,
-            'cumdrop': cumdrop
-        }
-
-        if sw_id not in queues_by_switch:
-            queues_by_switch[sw_id] = {}
-        if direction not in queues_by_switch[sw_id]:
-            queues_by_switch[sw_id][direction] = []
-        queues_by_switch[sw_id][direction].append(queue_info)
-
-        queues_by_type[direction].append(queue_info)
-
-        if sw_type not in queues_by_switch_type:
-            queues_by_switch_type[sw_type] = {}
-        if direction not in queues_by_switch_type[sw_type]:
-            queues_by_switch_type[sw_type][direction] = []
-        queues_by_switch_type[sw_type][direction].append(queue_info)
-
-    return {
-        'name': exp_name,
-        'dir': exp_dir,
-        'queues_by_switch': dict(queues_by_switch),
-        'queues_by_type': dict(queues_by_type),
-        'queues_by_switch_type': dict(queues_by_switch_type),
-        'all_queues': [{'id': qid, 'name': data['names'].get(qid, f"ID_{qid}"),
-                        'maxq': data['max'].get(qid, 0), 'cumarr': data['cumarr'].get(qid, 0)}
-                       for qid in data['max'].keys()]
-    }
-
-def calculate_stats(queues):
-    if not queues:
-        return {'count': 0, 'avg': 0, 'std': 0, 'cv': 0, 'min': 0, 'max': 0}
-
-    import statistics
-    values = [q['maxq'] for q in queues]
-    avg = statistics.mean(values) if values else 0
-    std = statistics.stdev(values) if len(values) > 1 else 0
-    cv = (std / avg * 100) if avg > 0 else 0
-
-    return {
-        'count': len(values),
-        'avg': avg,
-        'std': std,
-        'cv': cv,
-        'min': min(values) if values else 0,
-        'max': max(values) if values else 0
-    }
-
-def generate_summary_csv(experiments, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-
-    summary_file = os.path.join(output_dir, 'queue_summary.csv')
-    with open(summary_file, 'w') as f:
-        f.write("Experiment,SwitchType,Direction,Count,AvgMaxQ,StdDev,CV%,MinMaxQ,MaxMaxQ\n")
-
-        for exp in experiments:
-            for sw_type, directions in exp['queues_by_switch_type'].items():
-                for direction, queues in directions.items():
-                    stats = calculate_stats(queues)
-                    f.write(f"{exp['name']},{sw_type},{direction},{stats['count']},"
-                           f"{stats['avg']:.2f},{stats['std']:.2f},{stats['cv']:.2f},"
-                           f"{stats['min']},{stats['max']}\n")
-
-            all_queues = exp['all_queues']
-            stats_all = calculate_stats([{'maxq': q['maxq']} for q in all_queues])
-            f.write(f"{exp['name']},ALL,ALL,{stats_all['count']},"
-                   f"{stats_all['avg']:.2f},{stats_all['std']:.2f},{stats_all['cv']:.2f},"
-                   f"{stats_all['min']},{stats_all['max']}\n")
-
-    print(f"Saved: {summary_file}")
-    return summary_file
-
-def generate_detail_csv_pivot(experiments, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-
-    all_queue_keys = []
-    for exp in experiments:
-        for q in exp['all_queues']:
-            name = q['name']
-            sw_type, sw_id = get_switch_info(name)
-            direction = classify_queue(name)
-            queue_idx = get_queue_index(name)
-            key = (sw_type, sw_id, direction, name)
-            if key not in all_queue_keys:
-                all_queue_keys.append(key)
-
-    all_queue_keys.sort(key=lambda x: (x[0], x[1], x[2], get_queue_index(x[3])))
-
-    PKT_SIZE = 4150
-
-    detail_file = os.path.join(output_dir, 'queue_detail_pivot.csv')
-    with open(detail_file, 'w') as f:
-        header = ["SwitchType", "SwitchID", "QueueName", "Direction"]
-        for exp in experiments:
-            header.append(f"{exp['name']}_MaxQ_Pkt")
-            header.append(f"{exp['name']}_CumPkt")
-        f.write(",".join(header) + "\n")
-
-        exp_data = {}
-        for exp in experiments:
-            exp_data[exp['name']] = {q['name']: q for q in exp['all_queues']}
-
-        for sw_type, sw_id, direction, name in all_queue_keys:
-            row = [sw_type, sw_id, name, direction]
-            for exp in experiments:
-                q_data = exp_data.get(exp['name'], {}).get(name, {})
-                maxq = q_data.get('maxq', 0)
-                maxq_pkt = int(maxq / PKT_SIZE) if maxq > 0 else 0
-                row.append(str(maxq_pkt))
-                row.append(str(q_data.get('cumarr', '')))
-            f.write(",".join(row) + "\n")
-
-    print(f"Saved: {detail_file}")
-    return detail_file
-
-def generate_detail_csv(experiments, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-
-    all_queue_keys = []
-    for exp in experiments:
-        for q in exp['all_queues']:
-            name = q['name']
-            sw_type, sw_id = get_switch_info(name)
-            direction = classify_queue(name)
-            queue_idx = get_queue_index(name)
-            key = (sw_type, sw_id, direction, name)
-            if key not in all_queue_keys:
-                all_queue_keys.append(key)
-
-    all_queue_keys.sort(key=lambda x: (x[0], x[1], x[2], get_queue_index(x[3])))
-
-    PKT_SIZE = 4096
-
-    detail_file = os.path.join(output_dir, 'queue_detail.csv')
-    with open(detail_file, 'w') as f:
-        f.write("SwitchType,SwitchID,QueueName,Direction,QueueIdx,")
-        for i, exp in enumerate(experiments):
-            if i > 0:
-                f.write(",")
-            f.write(f"{exp['name']}_MaxQ_Pkt,{exp['name']}_CumPkt,{exp['name']}_Diff%")
-        f.write("\n")
-
-        exp_data = {}
-        exp_sw_avg = {}
-        for exp in experiments:
-            exp_data[exp['name']] = {q['name']: q for q in exp['all_queues']}
-            exp_sw_avg[exp['name']] = {}
-            for sw_id, directions in exp['queues_by_switch'].items():
-                all_values = []
-                for direction_queues in directions.values():
-                    all_values.extend([q['cumarr'] for q in direction_queues if isinstance(q, dict) and q.get('cumarr', 0) > 0])
-                avg = sum(all_values) / len(all_values) if all_values else 0
-                exp_sw_avg[exp['name']][sw_id] = avg
-
-        for sw_type, sw_id, direction, name in all_queue_keys:
-            queue_idx = get_queue_index(name)
-            row = [sw_type, sw_id, name, direction, str(queue_idx)]
-            
-            for exp in experiments:
-                q_data = exp_data.get(exp['name'], {}).get(name, {})
-                maxq = q_data.get('maxq', 0)
-                cumarr = q_data.get('cumarr', '')
-                sw_avg = exp_sw_avg.get(exp['name'], {}).get(sw_id, 0)
-                
-                maxq_pkt = int(maxq / PKT_SIZE) if maxq > 0 else 0
-                
-                if cumarr != '' and sw_avg > 0:
-                    diff_pct = ((cumarr - sw_avg) / sw_avg) * 100
-                    row.append(str(maxq_pkt))
-                    row.append(str(cumarr))
-                    row.append(f"{diff_pct:+.2f}")
-                else:
-                    row.append(str(maxq_pkt) if maxq > 0 else '')
-                    row.append(str(cumarr) if cumarr != '' else '')
-                    row.append('')
-            
-            f.write(",".join(row) + "\n")
-
-    print(f"Saved: {detail_file}")
-    return detail_file
-
-def generate_switch_comparison_csv(experiments, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-
-    all_switches = []
-    for exp in experiments:
-        for sw_id in exp['queues_by_switch'].keys():
-            if sw_id not in all_switches:
-                all_switches.append(sw_id)
-    all_switches.sort(key=lambda x: (x[0], int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 0))
-
-    comp_file = os.path.join(output_dir, 'switch_comparison.csv')
-    with open(comp_file, 'w') as f:
-        header = ["SwitchType", "SwitchID"]
-        for exp in experiments:
-            for direction in ['ToR_Downlink', 'Host_Uplink', 'ToR_Uplink', 'Agg_Downlink', 'Agg_Uplink']:
-                header.append(f"{exp['name']}_{direction}_Avg")
-                header.append(f"{exp['name']}_{direction}_CV")
-        f.write(",".join(header) + "\n")
-
-        exp_switch_data = {}
-        for exp in experiments:
-            exp_switch_data[exp['name']] = {}
-            for sw_id, directions in exp['queues_by_switch'].items():
-                exp_switch_data[exp['name']][sw_id] = {}
-                for direction, queues in directions.items():
-                    stats = calculate_stats(queues)
-                    exp_switch_data[exp['name']][sw_id][direction] = stats
-
-        for sw_id in all_switches:
-            sw_type, _ = get_switch_info(sw_id + "_test")
-            row = [sw_type, sw_id]
-            for exp in experiments:
-                for direction in ['ToR_Downlink', 'Host_Uplink', 'ToR_Uplink', 'Agg_Downlink', 'Agg_Uplink']:
-                    stats = exp_switch_data.get(exp['name'], {}).get(sw_id, {}).get(direction, {})
-                    row.append(f"{stats.get('avg', 0):.2f}" if stats else "")
-                    row.append(f"{stats.get('cv', 0):.2f}" if stats else "")
-            f.write(",".join(row) + "\n")
-
-    print(f"Saved: {comp_file}")
-    return comp_file
-
-def generate_report(experiments, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-
-    report_file = os.path.join(output_dir, 'analysis_report.txt')
-    with open(report_file, 'w') as f:
-        f.write("=" * 80 + "\n")
-        f.write("Queue Distribution Analysis Report\n")
-        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("=" * 80 + "\n\n")
-
-        f.write("## Experiments Analyzed\n")
-        for exp in experiments:
-            f.write(f"  - {exp['name']}\n")
-        f.write("\n")
-
-        f.write("## Overall Summary\n")
-        f.write("-" * 80 + "\n")
-        for exp in experiments:
-            all_queues = exp['all_queues']
-            stats = calculate_stats([{'maxq': q['maxq']} for q in all_queues])
-            f.write(f"\n### {exp['name']}\n")
-            f.write(f"  Total Queues: {stats['count']}\n")
-            f.write(f"  Average MaxQ: {stats['avg']:.2f} bytes\n")
-            f.write(f"  Std Dev: {stats['std']:.2f}\n")
-            f.write(f"  CV: {stats['cv']:.2f}%\n")
-            f.write(f"  Min MaxQ: {stats['min']}\n")
-            f.write(f"  Max MaxQ: {stats['max']}\n")
-
-            quality = "EXCELLENT" if stats['cv'] < 10 else "GOOD" if stats['cv'] < 20 else "FAIR" if stats['cv'] < 30 else "POOR"
-            f.write(f"  Load Balancing Quality: {quality}\n")
-
-        f.write("\n\n## Summary by Queue Type\n")
-        f.write("-" * 80 + "\n")
-        for exp in experiments:
-            f.write(f"\n### {exp['name']}\n")
-            for direction, queues in exp['queues_by_type'].items():
-                stats = calculate_stats(queues)
-                f.write(f"  {direction}: {stats['count']} queues, Avg={stats['avg']:.2f}, CV={stats['cv']:.2f}%\n")
-
-        f.write("\n\n## Summary by Switch Type and Direction\n")
-        f.write("-" * 80 + "\n")
-        for exp in experiments:
-            f.write(f"\n### {exp['name']}\n")
-            for sw_type, directions in exp['queues_by_switch_type'].items():
-                f.write(f"  {sw_type}:\n")
-                for direction, queues in directions.items():
-                    stats = calculate_stats(queues)
-                    f.write(f"    {direction}: {stats['count']} queues, Avg={stats['avg']:.2f}, CV={stats['cv']:.2f}%\n")
-
-        f.write("\n\n## Per-Switch Comparison\n")
-        f.write("-" * 80 + "\n")
-
-        switch_types = set()
-        for exp in experiments:
-            for sw_type in exp['queues_by_switch_type'].keys():
-                switch_types.add(sw_type)
-
-        for sw_type in sorted(switch_types):
-            f.write(f"\n### {sw_type} Switches\n")
-            f.write("| Experiment | Switch | Direction | Count | Avg MaxQ | CV% |\n")
-            f.write("|------------|--------|-----------|-------|----------|-----|\n")
-
-            for exp in experiments:
-                if sw_type not in exp['queues_by_switch_type']:
+def read_jain_indices(csv_file):
+    """从CSV文件中读取所有时间戳的Jain指数（排除Total行）和Total行的Jain指数"""
+    jain_indices = []
+    total_jain = None
+    with open(csv_file, 'r') as f:
+        lines = f.readlines()
+        # 跳过表头
+        for line in lines[1:]:
+            parts = line.strip().split(',')
+            if len(parts) > 1:
+                try:
+                    jain = float(parts[-1])  # 最后一列是Jain指数
+                    if line.startswith('Total,'):
+                        total_jain = jain
+                    else:
+                        jain_indices.append(jain)
+                except ValueError:
                     continue
-                directions = exp['queues_by_switch_type'][sw_type]
+    return jain_indices, total_jain
 
-                switch_ids = set()
-                for direction, queues in directions.items():
-                    for q in queues:
-                        switch_ids.add(q['switch_id'])
 
-                for direction in sorted(directions.keys()):
-                    queues = directions[direction]
-                    switch_ids_dir = set(q['switch_id'] for q in queues)
+def generate_boxplot_summary(parent_dir, results):
+    """生成箱线图总结，展示每个实验的Jain指数分布，并叠加Total Jain指数的折线图"""
+    # 创建概要目录
+    summary_dir = os.path.join(parent_dir, '概要')
+    os.makedirs(summary_dir, exist_ok=True)
+    
+    # 收集每个实验的Jain指数数据和Total Jain指数
+    exp_names = []
+    jain_data = []
+    total_jain_values = []
+    
+    for result in results:
+        csv_file = result['output_file']
+        if csv_file and os.path.exists(csv_file):
+            jain_indices, total_jain = read_jain_indices(csv_file)
+            if jain_indices:
+                exp_names.append(result['name'])
+                jain_data.append(jain_indices)
+                total_jain_values.append(total_jain if total_jain is not None else np.nan)
+    
+    if not jain_data:
+        print("No Jain index data found for boxplot")
+        return
+    
+    # 创建图形
+    fig, ax = plt.subplots(figsize=(max(14, len(exp_names) * 1.2), 7))
+    
+    # 绘制箱线图
+    bp = ax.boxplot(jain_data, labels=exp_names, patch_artist=True, positions=range(1, len(exp_names) + 1))
+    
+    # 设置箱体颜色
+    colors = plt.cm.Set3(np.linspace(0, 1, len(exp_names)))
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+    
+    # 计算并标注均值（在箱体右侧）
+    for i, (data, name) in enumerate(zip(jain_data, exp_names), 1):
+        mean_val = np.mean(data)
+        ax.text(i + 0.35, mean_val, f'{mean_val:.3f}', 
+                ha='left', va='center', fontsize=9, color='red', fontweight='bold')
+    
+    # 在同一图上绘制Total Jain指数的折线图
+    x_positions = range(1, len(exp_names) + 1)
+    ax.plot(x_positions, total_jain_values, 'o-', color='darkblue', linewidth=2, 
+            markersize=8, label='Total Jain Index', zorder=5)
+    
+    # 标注Total Jain指数的值
+    for i, (x, y) in enumerate(zip(x_positions, total_jain_values)):
+        if not np.isnan(y):
+            ax.text(x, y + 0.03, f'{y:.3f}', ha='center', va='bottom', 
+                   fontsize=9, color='darkblue', fontweight='bold')
+    
+    # 设置标题和标签
+    ax.set_ylabel('Jain Fairness Index', fontsize=12)
+    ax.set_xlabel('Experiment', fontsize=12)
+    ax.set_title('Jain Index Distribution (Boxplot) & Total Jain Index (Line)\n(Lower values indicate burstier traffic)', fontsize=14)
+    
+    # 设置y轴范围和x轴刻度
+    ax.set_ylim(0, 1.15)
+    ax.set_xticks(range(1, len(exp_names) + 1))
+    ax.set_xticklabels(exp_names, rotation=45, ha='right')
+    ax.axhline(y=1.0, color='r', linestyle='--', alpha=0.3)
+    
+    # 添加网格和图例
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.legend(loc='lower right')
+    
+    plt.tight_layout()
+    
+    # 保存图片
+    output_path = os.path.join(summary_dir, 'jain_index_boxplot.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"\nGenerated boxplot summary: {output_path}")
 
-                    for sw_id in sorted(switch_ids_dir, key=lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 0):
-                        sw_queues = [q for q in queues if q['switch_id'] == sw_id]
-                        stats = calculate_stats(sw_queues)
-                        f.write(f"| {exp['name']} | {sw_id} | {direction} | {stats['count']} | {stats['avg']:.0f} | {stats['cv']:.1f} |\n")
-
-        f.write("\n")
-        f.write("=" * 80 + "\n")
-        f.write("End of Report\n")
-        f.write("=" * 80 + "\n")
-
-    print(f"Saved: {report_file}")
-    return report_file
 
 def main():
-    parser = argparse.ArgumentParser(description='Unified Queue Analysis Tool')
-    parser.add_argument('-i', '--input', required=True, help='Input experiment directory (parent of experiment folders)')
-    parser.add_argument('-o', '--output', required=True, help='Output directory for results')
-    parser.add_argument('-e', '--experiments', nargs='+', help='Specific experiments to analyze (default: all)')
-
+    parser = argparse.ArgumentParser(description='Queue Traffic Analysis Tool')
+    parser.add_argument('-i', '--input', required=True, help='Input experiment directory')
+    parser.add_argument('-e', '--experiments', nargs='+', help='Specific experiments to analyze')
     args = parser.parse_args()
 
-    exp_dir = args.input
-    output_dir = args.output
-
-    if not os.path.exists(exp_dir):
-        print(f"Error: Directory not found: {exp_dir}")
+    if not os.path.exists(args.input):
+        print(f"Error: Directory not found: {args.input}")
         return
 
-    if args.experiments:
-        exp_names = args.experiments
-    else:
-        exp_names = [d for d in os.listdir(exp_dir)
-                    if os.path.isdir(os.path.join(exp_dir, d))
-                    and not d.startswith('.')
-                    and os.path.exists(os.path.join(exp_dir, d, 'result_parsed.log'))]
+    exp_names = args.experiments or [
+        d for d in os.listdir(args.input)
+        if os.path.isdir(os.path.join(args.input, d))
+        and not d.startswith('.')
+        and os.path.exists(os.path.join(args.input, d, 'result_parsed.log'))
+    ]
 
-    print(f"Found {len(exp_names)} experiments: {exp_names}")
-
-    experiments = []
-    for exp_name in sorted(exp_names):
-        exp_path = os.path.join(exp_dir, exp_name)
-        print(f"Analyzing: {exp_name}...")
-        result = analyze_experiment(exp_path, exp_name)
+    print(f"Found {len(exp_names)} experiments")
+    
+    results = []
+    for name in sorted(exp_names):
+        print(f"Analyzing: {name}...")
+        result = analyze_experiment(os.path.join(args.input, name), name)
         if result:
-            experiments.append(result)
+            results.append(result)
 
-    if not experiments:
-        print("No valid experiments found!")
-        return
+    print(f"\nGenerated {len(results)} CSV files:")
+    for r in results:
+        print(f"  - {r['output_file']}")
+    
+    # 生成箱线图总结
+    if results:
+        generate_boxplot_summary(args.input, results)
 
-    print(f"\nGenerating output files in: {output_dir}")
-
-    generate_summary_csv(experiments, output_dir)
-    generate_detail_csv(experiments, output_dir)
-    generate_detail_csv_pivot(experiments, output_dir)
-    generate_switch_comparison_csv(experiments, output_dir)
-    generate_report(experiments, output_dir)
-
-    print(f"\nAnalysis complete!")
-    print(f"Output directory: {output_dir}")
-    print(f"Files generated:")
-    print(f"  - queue_summary.csv (Summary by queue type)")
-    print(f"  - queue_detail.csv (Detailed data for each queue, pivot format)")
-    print(f"  - queue_detail_pivot.csv (Alternative pivot format)")
-    print(f"  - switch_comparison.csv (Per-switch comparison)")
-    print(f"  - analysis_report.txt (Human-readable report)")
 
 if __name__ == '__main__':
     main()
