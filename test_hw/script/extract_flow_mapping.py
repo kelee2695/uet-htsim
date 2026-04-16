@@ -5,19 +5,17 @@ import re
 
 def extract_flow_mapping(input_file, output_file):
     try:
-        with open(input_file, 'r') as infile:
-            lines = infile.readlines()
-        
         flow_mappings = {}
         
-        for line in lines:
-            if 'Flow Uec_' in line and 'flowId' in line:
-                match = re.search(r'Flow (Uec_\d+_\d+) flowId (\d+)', line)
-                if match:
-                    flow_name = match.group(1)
-                    flowid = match.group(2)
-                    if flowid not in flow_mappings:
-                        flow_mappings[flowid] = flow_name
+        with open(input_file, 'r') as infile:
+            for line in infile:
+                if 'Flow Uec_' in line and 'flowId' in line:
+                    match = re.search(r'Flow (Uec_\d+_\d+) flowId (\d+)', line)
+                    if match:
+                        flow_name = match.group(1)
+                        flowid = match.group(2)
+                        if flowid not in flow_mappings:
+                            flow_mappings[flowid] = flow_name
         
         with open(output_file, 'w') as outfile:
             outfile.write("flowid,flow_name\n")

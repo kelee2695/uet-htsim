@@ -4,7 +4,7 @@ BASE_DIR="/home/lrh/uet-htsim/test_hw/2spine_4leaf_256"
 RESULT_DIR="${BASE_DIR}/result"
 SCRIPT_DIR="/home/lrh/uet-htsim/test_hw/script"
 PARSE_OUTPUT="/home/lrh/uet-htsim/htsim/sim/build/parse_output"
-MAX_CONCURRENT=${2:-4}
+MAX_CONCURRENT=${2:-6}
 
 RED='\033[0;31m' GREEN='\033[0;32m' BLUE='\033[0;34m' NC='\033[0m'
 msg() { echo -e "${GREEN}✓${NC} $1"; }

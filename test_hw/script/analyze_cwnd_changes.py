@@ -13,277 +13,275 @@ def analyze_cwnd_changes(input_file, map_file, output_file):
             for row in reader:
                 flowid_to_uec[row['flowid']] = row['flow_name']
         
-        with open(input_file, 'r') as infile:
-            lines = infile.readlines()
-        
         # Track cwnd state for each flow
         cwnd_state = {}
         events = []
         
         # First pass: collect all cwnd-related events
-        for line in lines:
-            # Initialize event
-            init_match = re.search(r'Initialize per-instance NSCC parameters: flowid (\d+) .*? _cwnd=(\d+)', line)
-            if init_match:
-                flowid = init_match.group(1)
-                cwnd = int(init_match.group(2))
-                uec_name = flowid_to_uec.get(flowid, f"flowid_{flowid}")
-                events.append({
-                    'type': 'Initialize',
-                    'time': 0.0,
-                    'flowid': flowid,
-                    'flow_name': uec_name,
-                    'cwnd': cwnd,
-                    'reason': 'Initialize',
-                    'change': cwnd,
-                    'delay': '',
-                    'skip': '',
-                    'fair_inc': '',
-                    'prop_inc': '',
-                    'fast_inc': '',
-                    'eta_inc': '',
-                    'multi_dec': '',
-                    'quick_dec': '',
-                    'nack_dec': ''
-                })
-                cwnd_state[uec_name] = cwnd
-                continue
-            
-            # processAck event
-            process_match = re.search(r'At ([\d.]+) (Uec_\d+_\d+) uecSrc \d+ processAck: \d+ flow (Uec_\d+_\d+) cwnd (\d+) flightsize \d+ delay ([\d.]+) newlyrecvd \d+ skip (\d+) raw rtt (\d+)', line)
-            if process_match:
-                time = float(process_match.group(1))
-                flow_name = process_match.group(2)
-                cwnd = int(process_match.group(4))
-                delay = float(process_match.group(5))
-                skip = int(process_match.group(6))
-                raw_rtt = int(process_match.group(7))
+        with open(input_file, 'r') as infile:
+            for line in infile:
+                # Initialize event
+                init_match = re.search(r'Initialize per-instance NSCC parameters: flowid (\d+) .*? _cwnd=(\d+)', line)
+                if init_match:
+                    flowid = init_match.group(1)
+                    cwnd = int(init_match.group(2))
+                    uec_name = flowid_to_uec.get(flowid, f"flowid_{flowid}")
+                    events.append({
+                        'type': 'Initialize',
+                        'time': 0.0,
+                        'flowid': flowid,
+                        'flow_name': uec_name,
+                        'cwnd': cwnd,
+                        'reason': 'Initialize',
+                        'change': cwnd,
+                        'delay': '',
+                        'skip': '',
+                        'fair_inc': '',
+                        'prop_inc': '',
+                        'fast_inc': '',
+                        'eta_inc': '',
+                        'multi_dec': '',
+                        'quick_dec': '',
+                        'nack_dec': ''
+                    })
+                    cwnd_state[uec_name] = cwnd
+                    continue
                 
-                prev_cwnd = cwnd_state.get(flow_name, None)
-                change = cwnd - prev_cwnd if prev_cwnd is not None else 0
+                # processAck event
+                process_match = re.search(r'At ([\d.]+) (Uec_\d+_\d+) uecSrc \d+ processAck: \d+ flow (Uec_\d+_\d+) cwnd (\d+) flightsize \d+ delay ([\d.]+) newlyrecvd \d+ skip (\d+) raw rtt (\d+)', line)
+                if process_match:
+                    time = float(process_match.group(1))
+                    flow_name = process_match.group(2)
+                    cwnd = int(process_match.group(4))
+                    delay = float(process_match.group(5))
+                    skip = int(process_match.group(6))
+                    raw_rtt = int(process_match.group(7))
+                    
+                    prev_cwnd = cwnd_state.get(flow_name, None)
+                    change = cwnd - prev_cwnd if prev_cwnd is not None else 0
+                    
+                    # Determine reason based on delay and skip
+                    if skip == 0 and delay < 1.0:
+                        reason = 'Low delay + No ECN (proportional_increase + fast_increase)'
+                    elif skip == 0 and delay < 10.0:
+                        reason = 'Low delay + No ECN (proportional_increase)'
+                    elif skip == 0 and delay >= 10.0:
+                        reason = 'High delay + No ECN (fair_increase)'
+                    elif skip == 1 and delay < 10.0:
+                        reason = 'Low delay + ECN (NOOP)'
+                    elif skip == 1 and delay >= 10.0:
+                        reason = 'High delay + ECN (multiplicative_decrease)'
+                    else:
+                        reason = 'Unknown'
+                    
+                    events.append({
+                        'type': 'processAck',
+                        'time': time,
+                        'flowid': '',
+                        'flow_name': flow_name,
+                        'cwnd': cwnd,
+                        'reason': reason,
+                        'change': change,
+                        'delay': delay,
+                        'skip': skip,
+                        'fair_inc': '',
+                        'prop_inc': '',
+                        'fast_inc': '',
+                        'eta_inc': '',
+                        'multi_dec': '',
+                        'quick_dec': '',
+                        'nack_dec': ''
+                    })
+                    cwnd_state[flow_name] = cwnd
+                    continue
                 
-                # Determine reason based on delay and skip
-                if skip == 0 and delay < 1.0:
-                    reason = 'Low delay + No ECN (proportional_increase + fast_increase)'
-                elif skip == 0 and delay < 10.0:
-                    reason = 'Low delay + No ECN (proportional_increase)'
-                elif skip == 0 and delay >= 10.0:
-                    reason = 'High delay + No ECN (fair_increase)'
-                elif skip == 1 and delay < 10.0:
-                    reason = 'Low delay + ECN (NOOP)'
-                elif skip == 1 and delay >= 10.0:
-                    reason = 'High delay + ECN (multiplicative_decrease)'
-                else:
-                    reason = 'Unknown'
+                # proportional_increase event
+                prop_match = re.search(r'([\d.]+) flowid (\d+) (Uec_\d+_\d+) proportional_increase _nscc_cwnd (\d+)', line)
+                if prop_match:
+                    time = float(prop_match.group(1))
+                    flowid = prop_match.group(2)
+                    flow_name = prop_match.group(3)
+                    cwnd = int(prop_match.group(4))
+                    
+                    prev_cwnd = cwnd_state.get(flow_name, None)
+                    change = cwnd - prev_cwnd if prev_cwnd is not None else 0
+                    
+                    events.append({
+                        'type': 'proportional_increase',
+                        'time': time,
+                        'flowid': flowid,
+                        'flow_name': flow_name,
+                        'cwnd': cwnd,
+                        'reason': 'Low delay + No ECN (proportional_increase)',
+                        'change': change,
+                        'delay': '',
+                        'skip': '',
+                        'fair_inc': '',
+                        'prop_inc': '',
+                        'fast_inc': '',
+                        'eta_inc': '',
+                        'multi_dec': '',
+                        'quick_dec': '',
+                        'nack_dec': ''
+                    })
+                    cwnd_state[flow_name] = cwnd
+                    continue
                 
-                events.append({
-                    'type': 'processAck',
-                    'time': time,
-                    'flowid': '',
-                    'flow_name': flow_name,
-                    'cwnd': cwnd,
-                    'reason': reason,
-                    'change': change,
-                    'delay': delay,
-                    'skip': skip,
-                    'fair_inc': '',
-                    'prop_inc': '',
-                    'fast_inc': '',
-                    'eta_inc': '',
-                    'multi_dec': '',
-                    'quick_dec': '',
-                    'nack_dec': ''
-                })
-                cwnd_state[flow_name] = cwnd
-                continue
-            
-            # proportional_increase event
-            prop_match = re.search(r'([\d.]+) flowid (\d+) (Uec_\d+_\d+) proportional_increase _nscc_cwnd (\d+)', line)
-            if prop_match:
-                time = float(prop_match.group(1))
-                flowid = prop_match.group(2)
-                flow_name = prop_match.group(3)
-                cwnd = int(prop_match.group(4))
+                # fulfill_adjustmentx event
+                fulfillx_match = re.search(r'([\d.]+) flowid (\d+) (Uec_\d+_\d+) fulfill_adjustmentx _nscc_cwnd (\d+) inc_bytes (-?\d+)', line)
+                if fulfillx_match:
+                    time = float(fulfillx_match.group(1))
+                    flowid = fulfillx_match.group(2)
+                    flow_name = fulfillx_match.group(3)
+                    cwnd = int(fulfillx_match.group(4))
+                    inc_bytes = int(fulfillx_match.group(5))
+                    
+                    prev_cwnd = cwnd_state.get(flow_name, None)
+                    change = cwnd - prev_cwnd if prev_cwnd is not None else 0
+                    
+                    events.append({
+                        'type': 'fulfill_adjustmentx',
+                        'time': time,
+                        'flowid': flowid,
+                        'flow_name': flow_name,
+                        'cwnd': cwnd,
+                        'reason': 'Before fulfill_adjustment',
+                        'change': change,
+                        'delay': '',
+                        'skip': '',
+                        'fair_inc': '',
+                        'prop_inc': '',
+                        'fast_inc': '',
+                        'eta_inc': '',
+                        'multi_dec': '',
+                        'quick_dec': '',
+                        'nack_dec': ''
+                    })
+                    cwnd_state[flow_name] = cwnd
+                    continue
                 
-                prev_cwnd = cwnd_state.get(flow_name, None)
-                change = cwnd - prev_cwnd if prev_cwnd is not None else 0
+                # Running fulfill adjustment event
+                running_match = re.search(r'([\d.]+) flowid (\d+) Running fulfill adjustment cwnd (\d+) inc (-?\d+) fair_inc (-?\d+) prop_inc (-?\d+) fast_inc (-?\d+) eta_inc (-?\d+) multi_dec (-?\d+) quick_dec (-?\d+) nack_dec (-?\d+) avg-delay (\d+)', line)
+                if running_match:
+                    time = float(running_match.group(1))
+                    flowid = running_match.group(2)
+                    cwnd = int(running_match.group(3))
+                    inc = int(running_match.group(4))
+                    fair_inc = int(running_match.group(5))
+                    prop_inc = int(running_match.group(6))
+                    fast_inc = int(running_match.group(7))
+                    eta_inc = int(running_match.group(8))
+                    multi_dec = int(running_match.group(9))
+                    quick_dec = int(running_match.group(10))
+                    nack_dec = int(running_match.group(11))
+                    avg_delay = int(running_match.group(12))
+                    
+                    # Determine the dominant reason
+                    reasons = []
+                    if fair_inc > 0:
+                        reasons.append(f'fair_increase({fair_inc})')
+                    if prop_inc > 0:
+                        reasons.append(f'proportional_increase({prop_inc})')
+                    if fast_inc > 0:
+                        reasons.append(f'fast_increase({fast_inc})')
+                    if eta_inc > 0:
+                        reasons.append(f'eta_inc({eta_inc})')
+                    if multi_dec < 0:
+                        reasons.append(f'multiplicative_decrease({multi_dec})')
+                    if quick_dec < 0:
+                        reasons.append(f'quick_adapt({quick_dec})')
+                    if nack_dec < 0:
+                        reasons.append(f'nack_dec({nack_dec})')
+                    
+                    reason = ' + '.join(reasons) if reasons else 'No change'
+                    
+                    # Get flow name from flowid
+                    flow_name = flowid_to_uec.get(flowid, '')
+                    
+                    prev_cwnd = cwnd_state.get(flow_name, None)
+                    change = cwnd - prev_cwnd if prev_cwnd is not None else 0
+                    
+                    events.append({
+                        'type': 'Running fulfill adjustment',
+                        'time': time,
+                        'flowid': flowid,
+                        'flow_name': flow_name,
+                        'cwnd': cwnd,
+                        'reason': reason,
+                        'change': change,
+                        'delay': '',
+                        'skip': '',
+                        'fair_inc': fair_inc,
+                        'prop_inc': prop_inc,
+                        'fast_inc': fast_inc,
+                        'eta_inc': eta_inc,
+                        'multi_dec': multi_dec,
+                        'quick_dec': quick_dec,
+                        'nack_dec': nack_dec
+                    })
+                    cwnd_state[flow_name] = cwnd
+                    continue
                 
-                events.append({
-                    'type': 'proportional_increase',
-                    'time': time,
-                    'flowid': flowid,
-                    'flow_name': flow_name,
-                    'cwnd': cwnd,
-                    'reason': 'Low delay + No ECN (proportional_increase)',
-                    'change': change,
-                    'delay': '',
-                    'skip': '',
-                    'fair_inc': '',
-                    'prop_inc': '',
-                    'fast_inc': '',
-                    'eta_inc': '',
-                    'multi_dec': '',
-                    'quick_dec': '',
-                    'nack_dec': ''
-                })
-                cwnd_state[flow_name] = cwnd
-                continue
-            
-            # fulfill_adjustmentx event
-            fulfillx_match = re.search(r'([\d.]+) flowid (\d+) (Uec_\d+_\d+) fulfill_adjustmentx _nscc_cwnd (\d+) inc_bytes (-?\d+)', line)
-            if fulfillx_match:
-                time = float(fulfillx_match.group(1))
-                flowid = fulfillx_match.group(2)
-                flow_name = fulfillx_match.group(3)
-                cwnd = int(fulfillx_match.group(4))
-                inc_bytes = int(fulfillx_match.group(5))
+                # fulfill_adjustment event
+                fulfill_match = re.search(r'([\d.]+) flowid (\d+) (Uec_\d+_\d+) fulfill_adjustment _nscc_cwnd (\d+)', line)
+                if fulfill_match:
+                    time = float(fulfill_match.group(1))
+                    flowid = fulfill_match.group(2)
+                    flow_name = fulfill_match.group(3)
+                    cwnd = int(fulfill_match.group(4))
+                    
+                    prev_cwnd = cwnd_state.get(flow_name, None)
+                    change = cwnd - prev_cwnd if prev_cwnd is not None else 0
+                    
+                    events.append({
+                        'type': 'fulfill_adjustment',
+                        'time': time,
+                        'flowid': flowid,
+                        'flow_name': flow_name,
+                        'cwnd': cwnd,
+                        'reason': 'After fulfill_adjustment',
+                        'change': change,
+                        'delay': '',
+                        'skip': '',
+                        'fair_inc': '',
+                        'prop_inc': '',
+                        'fast_inc': '',
+                        'eta_inc': '',
+                        'multi_dec': '',
+                        'quick_dec': '',
+                        'nack_dec': ''
+                    })
+                    cwnd_state[flow_name] = cwnd
+                    continue
                 
-                prev_cwnd = cwnd_state.get(flow_name, None)
-                change = cwnd - prev_cwnd if prev_cwnd is not None else 0
-                
-                events.append({
-                    'type': 'fulfill_adjustmentx',
-                    'time': time,
-                    'flowid': flowid,
-                    'flow_name': flow_name,
-                    'cwnd': cwnd,
-                    'reason': 'Before fulfill_adjustment',
-                    'change': change,
-                    'delay': '',
-                    'skip': '',
-                    'fair_inc': '',
-                    'prop_inc': '',
-                    'fast_inc': '',
-                    'eta_inc': '',
-                    'multi_dec': '',
-                    'quick_dec': '',
-                    'nack_dec': ''
-                })
-                cwnd_state[flow_name] = cwnd
-                continue
-            
-            # Running fulfill adjustment event
-            running_match = re.search(r'([\d.]+) flowid (\d+) Running fulfill adjustment cwnd (\d+) inc (-?\d+) fair_inc (-?\d+) prop_inc (-?\d+) fast_inc (-?\d+) eta_inc (-?\d+) multi_dec (-?\d+) quick_dec (-?\d+) nack_dec (-?\d+) avg-delay (\d+)', line)
-            if running_match:
-                time = float(running_match.group(1))
-                flowid = running_match.group(2)
-                cwnd = int(running_match.group(3))
-                inc = int(running_match.group(4))
-                fair_inc = int(running_match.group(5))
-                prop_inc = int(running_match.group(6))
-                fast_inc = int(running_match.group(7))
-                eta_inc = int(running_match.group(8))
-                multi_dec = int(running_match.group(9))
-                quick_dec = int(running_match.group(10))
-                nack_dec = int(running_match.group(11))
-                avg_delay = int(running_match.group(12))
-                
-                # Determine the dominant reason
-                reasons = []
-                if fair_inc > 0:
-                    reasons.append(f'fair_increase({fair_inc})')
-                if prop_inc > 0:
-                    reasons.append(f'proportional_increase({prop_inc})')
-                if fast_inc > 0:
-                    reasons.append(f'fast_increase({fast_inc})')
-                if eta_inc > 0:
-                    reasons.append(f'eta_inc({eta_inc})')
-                if multi_dec < 0:
-                    reasons.append(f'multiplicative_decrease({multi_dec})')
-                if quick_dec < 0:
-                    reasons.append(f'quick_adapt({quick_dec})')
-                if nack_dec < 0:
-                    reasons.append(f'nack_dec({nack_dec})')
-                
-                reason = ' + '.join(reasons) if reasons else 'No change'
-                
-                # Get flow name from flowid
-                flow_name = flowid_to_uec.get(flowid, '')
-                
-                prev_cwnd = cwnd_state.get(flow_name, None)
-                change = cwnd - prev_cwnd if prev_cwnd is not None else 0
-                
-                events.append({
-                    'type': 'Running fulfill adjustment',
-                    'time': time,
-                    'flowid': flowid,
-                    'flow_name': flow_name,
-                    'cwnd': cwnd,
-                    'reason': reason,
-                    'change': change,
-                    'delay': '',
-                    'skip': '',
-                    'fair_inc': fair_inc,
-                    'prop_inc': prop_inc,
-                    'fast_inc': fast_inc,
-                    'eta_inc': eta_inc,
-                    'multi_dec': multi_dec,
-                    'quick_dec': quick_dec,
-                    'nack_dec': nack_dec
-                })
-                cwnd_state[flow_name] = cwnd
-                continue
-            
-            # fulfill_adjustment event
-            fulfill_match = re.search(r'([\d.]+) flowid (\d+) (Uec_\d+_\d+) fulfill_adjustment _nscc_cwnd (\d+)', line)
-            if fulfill_match:
-                time = float(fulfill_match.group(1))
-                flowid = fulfill_match.group(2)
-                flow_name = fulfill_match.group(3)
-                cwnd = int(fulfill_match.group(4))
-                
-                prev_cwnd = cwnd_state.get(flow_name, None)
-                change = cwnd - prev_cwnd if prev_cwnd is not None else 0
-                
-                events.append({
-                    'type': 'fulfill_adjustment',
-                    'time': time,
-                    'flowid': flowid,
-                    'flow_name': flow_name,
-                    'cwnd': cwnd,
-                    'reason': 'After fulfill_adjustment',
-                    'change': change,
-                    'delay': '',
-                    'skip': '',
-                    'fair_inc': '',
-                    'prop_inc': '',
-                    'fast_inc': '',
-                    'eta_inc': '',
-                    'multi_dec': '',
-                    'quick_dec': '',
-                    'nack_dec': ''
-                })
-                cwnd_state[flow_name] = cwnd
-                continue
-            
-            # quick_adapt event
-            quick_match = re.search(r'At ([\d.]+) (Uec_\d+_\d+) running quickadapt, CWND is (\d+) setting it to (\d+)', line)
-            if quick_match:
-                time = float(quick_match.group(1))
-                flow_name = quick_match.group(2)
-                old_cwnd = int(quick_match.group(3))
-                new_cwnd = int(quick_match.group(4))
-                
-                events.append({
-                    'type': 'quick_adapt',
-                    'time': time,
-                    'flowid': '',
-                    'flow_name': flow_name,
-                    'cwnd': new_cwnd,
-                    'reason': f'quick_adapt: {old_cwnd} -> {new_cwnd}',
-                    'change': new_cwnd - old_cwnd,
-                    'delay': '',
-                    'skip': '',
-                    'fair_inc': '',
-                    'prop_inc': '',
-                    'fast_inc': '',
-                    'eta_inc': '',
-                    'multi_dec': '',
-                    'quick_dec': '',
-                    'nack_dec': ''
-                })
-                cwnd_state[flow_name] = new_cwnd
-                continue
+                # quick_adapt event
+                quick_match = re.search(r'At ([\d.]+) (Uec_\d+_\d+) running quickadapt, CWND is (\d+) setting it to (\d+)', line)
+                if quick_match:
+                    time = float(quick_match.group(1))
+                    flow_name = quick_match.group(2)
+                    old_cwnd = int(quick_match.group(3))
+                    new_cwnd = int(quick_match.group(4))
+                    
+                    events.append({
+                        'type': 'quick_adapt',
+                        'time': time,
+                        'flowid': '',
+                        'flow_name': flow_name,
+                        'cwnd': new_cwnd,
+                        'reason': f'quick_adapt: {old_cwnd} -> {new_cwnd}',
+                        'change': new_cwnd - old_cwnd,
+                        'delay': '',
+                        'skip': '',
+                        'fair_inc': '',
+                        'prop_inc': '',
+                        'fast_inc': '',
+                        'eta_inc': '',
+                        'multi_dec': '',
+                        'quick_dec': '',
+                        'nack_dec': ''
+                    })
+                    cwnd_state[flow_name] = new_cwnd
+                    continue
         
         # Fill in missing flow names before sorting
         for event in events:

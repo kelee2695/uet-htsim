@@ -4,7 +4,7 @@
       "name": "nscc_composite_32to1_origin",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_a2a10MB.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -24,7 +24,7 @@
       "name": "nscc_composite_32to1",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_a2a10MB.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -45,7 +45,7 @@
       "name": "nscc_composite_32to1_enqueue_ecn",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_a2a10MB.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -67,7 +67,7 @@
       "name": "nscc_composite_32to1_fastcn",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_a2a10MB.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",

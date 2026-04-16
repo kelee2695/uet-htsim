@@ -29,56 +29,54 @@ def parse_result_file(result_file):
     }
     
     with open(result_file, 'r') as f:
-        lines = f.readlines()
-    
-    for line in lines:
-        # 提取连接数
-        if 'Connections:' in line:
-            match = re.search(r'Connections:\s*(\d+)', line)
-            if match:
-                data['connections'] = int(match.group(1))
-        
-        # 提取流完成信息
-        if 'finished at' in line:
-            match = re.search(r'Flow\s+(\S+)\s+flowId\s+(\d+)\s+uecSrc\s+(\d+)\s+finished at\s+(\d+(?:\.\d+)?)\s+total messages\s+(\d+)\s+total packets\s+(\d+)\s+RTS\s+(\d+)\s+total bytes\s+(\d+)', line)
-            if match:
-                flow_name = match.group(1)
-                flow_id = match.group(2)
-                fct = float(match.group(4))
-                total_packets = int(match.group(6))
-                total_bytes = int(match.group(8))
-                
-                # 从流名称中提取目的地址 (格式: Uec_src_dst)
-                flow_parts = flow_name.split('_')
-                if len(flow_parts) >= 3:
-                    dst_id = int(flow_parts[2])
-                else:
-                    dst_id = 0  # 默认目的地址
-                
-                data['fcts'].append(fct)
-                data['total_pkts'][flow_id] = total_packets
-                data['flow_sizes'][flow_id] = total_bytes
-                data['actual_connections'] += 1
-                
-                # 按目的地址累加流量
-                data['flow_dst_bytes'][dst_id] = data['flow_dst_bytes'].get(dst_id, 0) + total_bytes
-                
-                # 计算吞吐量 (Gbps)
-                thr = (total_bytes * 8) / (fct * 10**-6) / (10**9)
-                data['throughputs'].append(thr)
-        
-        # 提取数据包统计
-        if 'New:' in line and 'Rtx:' in line:
-            match = re.search(r'New:\s+(\d+)\s+Rtx:\s+(\d+)\s+RTS:\s+(\d+)\s+Bounced:\s+(\d+)\s+ACKs:\s+(\d+)\s+NACKs:\s+(\d+)\s+Pulls:\s+(\d+)\s+sleek_pkts:\s+(\d+)', line)
-            if match:
-                data['new_pkts'] = int(match.group(1))
-                data['rtx_pkts'] = int(match.group(2))
-                data['rts_pkts'] = int(match.group(3))
-                data['bounced_pkts'] = int(match.group(4))
-                data['acks'] = int(match.group(5))
-                data['nacks'] = int(match.group(6))
-                data['pulls'] = int(match.group(7))
-                data['sleek_pkts'] = int(match.group(8))
+        for line in f:
+            # 提取连接数
+            if 'Connections:' in line:
+                match = re.search(r'Connections:\s*(\d+)', line)
+                if match:
+                    data['connections'] = int(match.group(1))
+            
+            # 提取流完成信息
+            if 'finished at' in line:
+                match = re.search(r'Flow\s+(\S+)\s+flowId\s+(\d+)\s+uecSrc\s+(\d+)\s+finished at\s+(\d+(?:\.\d+)?)\s+total messages\s+(\d+)\s+total packets\s+(\d+)\s+RTS\s+(\d+)\s+total bytes\s+(\d+)', line)
+                if match:
+                    flow_name = match.group(1)
+                    flow_id = match.group(2)
+                    fct = float(match.group(4))
+                    total_packets = int(match.group(6))
+                    total_bytes = int(match.group(8))
+                    
+                    # 从流名称中提取目的地址 (格式: Uec_src_dst)
+                    flow_parts = flow_name.split('_')
+                    if len(flow_parts) >= 3:
+                        dst_id = int(flow_parts[2])
+                    else:
+                        dst_id = 0  # 默认目的地址
+                    
+                    data['fcts'].append(fct)
+                    data['total_pkts'][flow_id] = total_packets
+                    data['flow_sizes'][flow_id] = total_bytes
+                    data['actual_connections'] += 1
+                    
+                    # 按目的地址累加流量
+                    data['flow_dst_bytes'][dst_id] = data['flow_dst_bytes'].get(dst_id, 0) + total_bytes
+                    
+                    # 计算吞吐量 (Gbps)
+                    thr = (total_bytes * 8) / (fct * 10**-6) / (10**9)
+                    data['throughputs'].append(thr)
+            
+            # 提取数据包统计
+            if 'New:' in line and 'Rtx:' in line:
+                match = re.search(r'New:\s+(\d+)\s+Rtx:\s+(\d+)\s+RTS:\s+(\d+)\s+Bounced:\s+(\d+)\s+ACKs:\s+(\d+)\s+NACKs:\s+(\d+)\s+Pulls:\s+(\d+)\s+sleek_pkts:\s+(\d+)', line)
+                if match:
+                    data['new_pkts'] = int(match.group(1))
+                    data['rtx_pkts'] = int(match.group(2))
+                    data['rts_pkts'] = int(match.group(3))
+                    data['bounced_pkts'] = int(match.group(4))
+                    data['acks'] = int(match.group(5))
+                    data['nacks'] = int(match.group(6))
+                    data['pulls'] = int(match.group(7))
+                    data['sleek_pkts'] = int(match.group(8))
     
     return data
 

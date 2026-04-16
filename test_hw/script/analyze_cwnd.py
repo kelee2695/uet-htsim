@@ -30,20 +30,18 @@ class CwndLogAnalyzer:
     def parse_log(self, input_file):
         """解析日志文件"""
         with open(input_file, 'r') as f:
-            lines = f.readlines()
-        
-        for line in lines:
-            match = self.LOG_PATTERN.search(line)
-            if match:
-                self.events.append({
-                    'algo': match.group(1),
-                    'time': float(match.group(2)),
-                    'flowid': match.group(3),
-                    'op_type': match.group(4),
-                    'cwnd_before': int(match.group(5)),
-                    'cwnd_after': int(match.group(6)),
-                    'line': line.strip()
-                })
+            for line in f:
+                match = self.LOG_PATTERN.search(line)
+                if match:
+                    self.events.append({
+                        'algo': match.group(1),
+                        'time': float(match.group(2)),
+                        'flowid': match.group(3),
+                        'op_type': match.group(4),
+                        'cwnd_before': int(match.group(5)),
+                        'cwnd_after': int(match.group(6)),
+                        'line': line.strip()
+                    })
         
         return len(self.events)
     
