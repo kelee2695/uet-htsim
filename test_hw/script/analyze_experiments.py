@@ -16,6 +16,7 @@ def parse_result_file(result_file):
         'throughputs': [],
         'total_pkts': {},
         'flow_sizes': {},
+        'flow_dst_bytes': {},  # 按目的地址统计流量: dst_id -> total_bytes
         'new_pkts': 0,
         'rtx_pkts': 0,
         'rts_pkts': 0,
@@ -47,10 +48,20 @@ def parse_result_file(result_file):
                 total_packets = int(match.group(6))
                 total_bytes = int(match.group(8))
                 
+                # 从流名称中提取目的地址 (格式: Uec_src_dst)
+                flow_parts = flow_name.split('_')
+                if len(flow_parts) >= 3:
+                    dst_id = int(flow_parts[2])
+                else:
+                    dst_id = 0  # 默认目的地址
+                
                 data['fcts'].append(fct)
                 data['total_pkts'][flow_id] = total_packets
                 data['flow_sizes'][flow_id] = total_bytes
                 data['actual_connections'] += 1
+                
+                # 按目的地址累加流量
+                data['flow_dst_bytes'][dst_id] = data['flow_dst_bytes'].get(dst_id, 0) + total_bytes
                 
                 # 计算吞吐量 (Gbps)
                 thr = (total_bytes * 8) / (fct * 10**-6) / (10**9)
@@ -212,10 +223,15 @@ def analyze_experiments(result_dir, output_dir='./figures/'):
     # 生成CSV格式的详细数据
     csv_file = os.path.join(output_dir, 'experiment_details.csv')
     with open(csv_file, 'w') as f:
+        # 动态生成表头：每个目的地址的流量 + 最大流量 + CCT + 总带宽
+        max_dst_count = max(len(data['flow_dst_bytes']) for data in experiments_data.values()) if experiments_data else 0
+        dst_headers = [f"Dst_{i}_Bytes" for i in range(max_dst_count)]
+        
         f.write("Experiment,Connections,Actual_Connections,Mean_FCT_us,Min_FCT_us,Max_FCT_us,Median_FCT_us,")
         f.write("Mean_Throughput_Gbps,Min_Throughput_Gbps,Max_Throughput_Gbps,")
         f.write("New_Pkts,Rtx_Pkts,Rts_Pkts,Bounced_Pkts,Acks,Nacks,Pulls_Pkts,Sleek_Pkts,Rtx_Rate_%,")
-        f.write("Total_Bytes,CCT_us,Total_Bandwidth_Gbps\n")
+        f.write(','.join(dst_headers) + ",")
+        f.write("Max_Traffic_Bytes,CCT_us,Total_Bandwidth_Gbps\n")
         
         for exp_name, data in experiments_data.items():
             f.write(f"{exp_name},{data['connections']},{data['actual_connections']},")
@@ -238,17 +254,33 @@ def analyze_experiments(result_dir, output_dir='./figures/'):
             else:
                 f.write("0,")
             
-            # 计算总完成带宽 = 总流量 / CCT
-            total_bytes = sum(data['flow_sizes'].values()) if data['flow_sizes'] else 0
-            cct = max(data['fcts']) if data['fcts'] else 0  # Completion Time (最大FCT)
+            # CCT = 最大FCT
+            cct = max(data['fcts']) if data['fcts'] else 0
             
-            if cct > 0:
-                # 总完成带宽 (Gbps) = (总字节数 * 8) / (CCT秒数) / 10^9
-                total_bandwidth_gbps = (total_bytes * 8) / (cct * 1e-6) / 1e9
+            # 收集每个目的地址的流量
+            dst_bytes_list = []
+            if data['flow_dst_bytes']:
+                for dst_id in sorted(data['flow_dst_bytes'].keys()):
+                    dst_bytes_list.append(data['flow_dst_bytes'][dst_id])
+            
+            # 填充到固定列数
+            while len(dst_bytes_list) < max_dst_count:
+                dst_bytes_list.append(0)
+            
+            # 最大流量
+            max_traffic_bytes = max(dst_bytes_list) if dst_bytes_list else 0
+            
+            # 总带宽 = 最大流量 / CCT
+            if cct > 0 and max_traffic_bytes > 0:
+                total_bandwidth_gbps = (max_traffic_bytes * 8) / (cct * 1e-6) / 1e9
             else:
                 total_bandwidth_gbps = 0
             
-            f.write(f"{total_bytes},{cct:.2f},{total_bandwidth_gbps:.2f}")
+            # 写入每个目的地址的流量
+            f.write(','.join(str(b) for b in dst_bytes_list) + ",")
+            
+            # 写入最大流量、CCT、总带宽
+            f.write(f"{max_traffic_bytes},{cct:.2f},{total_bandwidth_gbps:.2f}")
             f.write("\n")
     
     print(f"生成详细数据CSV: {csv_file}")

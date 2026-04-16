@@ -81,8 +81,15 @@ def calculate_jain_index(values):
     return jain
 
 
+def get_leaf_us_queues(queue_names, leaf_id):
+    """获取指定叶交换机到US0和US1的队列"""
+    prefix1 = f'LS{leaf_id}->US0('
+    prefix2 = f'LS{leaf_id}->US1('
+    return [q for q in queue_names if q.startswith(prefix1) or q.startswith(prefix2)]
+
+
 def generate_csv(exp_dir, data):
-    """生成CSV文件：每时间片新增包数 + Jain指数 + 总包数"""
+    """生成CSV文件：每时间片新增包数 + 每个叶交换机的Jain指数 + 总包数"""
     names = data['names']
     samples = data['samples']
     
@@ -90,8 +97,10 @@ def generate_csv(exp_dir, data):
     queue_names = list({normalize_queue_name(names[qid]) for qid in samples if qid in names})
     queue_names.sort(key=parse_queue_name)
     
-    # 筛选 LS0->US0 和 LS0->US1 的队列（共64列）
-    us_queues = [q for q in queue_names if q.startswith('LS0->US0(') or q.startswith('LS0->US1(')]
+    # 为每个叶交换机获取上行队列（LS0-LS3）
+    leaf_queues = {}
+    for leaf_id in range(4):
+        leaf_queues[leaf_id] = get_leaf_us_queues(queue_names, leaf_id)
     
     # 收集所有时间戳
     timestamps = sorted({ts for qid in samples for ts, _ in samples[qid]})
@@ -119,28 +128,35 @@ def generate_csv(exp_dir, data):
             last_vals[qname] = cum
             totals[qname] = cum
         
-        # 计算 LS0->US0 和 LS0->US1 的Jain指数
-        us_values = [row.get(q, 0) for q in us_queues]
-        row['Jain_Index'] = calculate_jain_index(us_values)
+        # 计算每个叶交换机的Jain指数
+        for leaf_id in range(4):
+            us_queues = leaf_queues[leaf_id]
+            us_values = [row.get(q, 0) for q in us_queues]
+            row[f'Jain_Index_LS{leaf_id}'] = calculate_jain_index(us_values)
         
         interval_data.append(row)
     
     # 写入CSV
     output_file = os.path.join(exp_dir, 'queue_traffic.csv')
     with open(output_file, 'w') as f:
-        # 表头：所有队列名 + Jain_Index
-        f.write('Timestamp,' + ','.join(queue_names) + ',Jain_Index\n')
+        # 表头：所有队列名 + 每个叶交换机的Jain_Index
+        jain_headers = [f'Jain_Index_LS{i}' for i in range(4)]
+        f.write('Timestamp,' + ','.join(queue_names) + ',' + ','.join(jain_headers) + '\n')
         
         # 数据行
         for row in interval_data:
             line = str(row['timestamp']) + ',' + ','.join(str(row.get(q, 0)) for q in queue_names)
-            line += ',' + str(round(row['Jain_Index'], 4))
+            for leaf_id in range(4):
+                line += ',' + str(round(row[f'Jain_Index_LS{leaf_id}'], 4))
             f.write(line + '\n')
         
-        # 总包数行（也计算Jain指数）
-        total_values = [totals.get(q, 0) for q in us_queues]
-        total_jain = calculate_jain_index(total_values)
-        total_line = 'Total,' + ','.join(str(totals.get(q, 0)) for q in queue_names) + ',' + str(round(total_jain, 4)) + '\n'
+        # 总包数行（也计算每个叶交换机的Jain指数）
+        total_line = 'Total,' + ','.join(str(totals.get(q, 0)) for q in queue_names)
+        for leaf_id in range(4):
+            total_values = [totals.get(q, 0) for q in leaf_queues[leaf_id]]
+            total_jain = calculate_jain_index(total_values)
+            total_line += ',' + str(round(total_jain, 4))
+        total_line += '\n'
         f.write(total_line)
     
     print(f"Saved: {output_file}")
@@ -163,28 +179,44 @@ def analyze_experiment(exp_dir, exp_name):
 
 
 def read_jain_indices(csv_file):
-    """从CSV文件中读取所有时间戳的Jain指数（排除Total行）和Total行的Jain指数"""
-    jain_indices = []
-    total_jain = None
+    """从CSV文件中读取所有时间戳的每个叶交换机的Jain指数（排除Total行）和Total行的Jain指数"""
+    jain_indices_by_leaf = {i: [] for i in range(4)}  # LS0-LS3
+    total_jain_by_leaf = {i: None for i in range(4)}
+    
     with open(csv_file, 'r') as f:
         lines = f.readlines()
-        # 跳过表头
+        if len(lines) < 1:
+            return jain_indices_by_leaf, total_jain_by_leaf
+        
+        # 解析表头，找到每个Jain_Index列的位置
+        header = lines[0].strip().split(',')
+        jain_col_indices = {}
+        for leaf_id in range(4):
+            col_name = f'Jain_Index_LS{leaf_id}'
+            if col_name in header:
+                jain_col_indices[leaf_id] = header.index(col_name)
+        
+        # 跳过表头，读取数据
         for line in lines[1:]:
             parts = line.strip().split(',')
             if len(parts) > 1:
                 try:
-                    jain = float(parts[-1])  # 最后一列是Jain指数
-                    if line.startswith('Total,'):
-                        total_jain = jain
-                    else:
-                        jain_indices.append(jain)
+                    is_total = line.startswith('Total,')
+                    for leaf_id, col_idx in jain_col_indices.items():
+                        if col_idx < len(parts):
+                            jain = float(parts[col_idx])
+                            if is_total:
+                                total_jain_by_leaf[leaf_id] = jain
+                            else:
+                                jain_indices_by_leaf[leaf_id].append(jain)
                 except ValueError:
                     continue
-    return jain_indices, total_jain
+    
+    return jain_indices_by_leaf, total_jain_by_leaf
 
 
-def generate_boxplot_summary(parent_dir, results):
-    """生成箱线图总结，展示每个实验的Jain指数分布，并叠加Total Jain指数的折线图"""
+def generate_boxplot_for_leaf(parent_dir, results, leaf_id):
+    """为指定叶交换机生成箱线图总结"""
     # 创建概要目录
     summary_dir = os.path.join(parent_dir, '概要')
     os.makedirs(summary_dir, exist_ok=True)
@@ -197,14 +229,16 @@ def generate_boxplot_summary(parent_dir, results):
     for result in results:
         csv_file = result['output_file']
         if csv_file and os.path.exists(csv_file):
-            jain_indices, total_jain = read_jain_indices(csv_file)
+            jain_indices_by_leaf, total_jain_by_leaf = read_jain_indices(csv_file)
+            jain_indices = jain_indices_by_leaf.get(leaf_id, [])
+            total_jain = total_jain_by_leaf.get(leaf_id)
             if jain_indices:
                 exp_names.append(result['name'])
                 jain_data.append(jain_indices)
                 total_jain_values.append(total_jain if total_jain is not None else np.nan)
     
     if not jain_data:
-        print("No Jain index data found for boxplot")
+        print(f"No Jain index data found for LS{leaf_id}")
         return
     
     # 创建图形
@@ -238,7 +272,7 @@ def generate_boxplot_summary(parent_dir, results):
     # 设置标题和标签
     ax.set_ylabel('Jain Fairness Index', fontsize=12)
     ax.set_xlabel('Experiment', fontsize=12)
-    ax.set_title('Jain Index Distribution (Boxplot) & Total Jain Index (Line)\n(Lower values indicate burstier traffic)', fontsize=14)
+    ax.set_title(f'LS{leaf_id} Jain Index Distribution (Boxplot) & Total Jain Index (Line)\n(Lower values indicate burstier traffic)', fontsize=14)
     
     # 设置y轴范围和x轴刻度
     ax.set_ylim(0, 1.15)
@@ -253,11 +287,17 @@ def generate_boxplot_summary(parent_dir, results):
     plt.tight_layout()
     
     # 保存图片
-    output_path = os.path.join(summary_dir, 'jain_index_boxplot.png')
+    output_path = os.path.join(summary_dir, f'jain_index_boxplot_LS{leaf_id}.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(f"\nGenerated boxplot summary: {output_path}")
+    print(f"Generated boxplot for LS{leaf_id}: {output_path}")
+
+
+def generate_boxplot_summary(parent_dir, results):
+    """生成箱线图总结，为每个叶交换机单独生成一张图"""
+    for leaf_id in range(4):
+        generate_boxplot_for_leaf(parent_dir, results, leaf_id)
 
 
 def main():

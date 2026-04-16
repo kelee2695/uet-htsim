@@ -4,7 +4,7 @@
       "name": "constant_composite_32to1",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_p2p.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -26,7 +26,7 @@
       "name": "nscc_composite_32to1",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_p2p.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -48,7 +48,7 @@
       "name": "rccc_composite_32to1",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_p2p.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -70,7 +70,7 @@
       "name": "hashx_nscc_composite_32to1",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_p2p.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -92,7 +92,7 @@
       "name": "hashx_fastcn_nscc_composite_32to1",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_p2p.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
@@ -115,7 +115,7 @@
       "name": "hashx_fastcn_z_incast_composite_32to1",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/incast_32to1_1MB.cm",
+        "-tm", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/connection_matrices/32to1_p2p.cm",
         "-topo", "/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/leaf_spine_256.topo",
         "-debug",
         "-log", "nic",
