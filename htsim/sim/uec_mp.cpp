@@ -299,8 +299,8 @@ UecMpHashx::UecMpHashx(uint16_t no_of_paths, bool debug, uint32_t src, uint32_t 
       {
     // 使用 src 和 dst 计算初始路径（使用大质数增加哈希分散性）
     // const uint32_t HASH_PRIME = 2654435761u;  // 大质数
-    _current_path =  _dst % _no_of_paths;
-    // _current_path = random() % _no_of_paths;
+    // _current_path =  _dst % _no_of_paths;
+    _current_path = random() % _no_of_paths;
 
     _path_weights.resize(_no_of_paths);
     for (uint32_t i = 0; i < _no_of_paths; i++) {
@@ -406,6 +406,32 @@ uint16_t UecMpHashx::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
              << " Hashx nextEntropy selected_path " << selected_path
              << " weight " << _path_weights[selected_path]
              << " next_path " << _current_path << endl;
+    }
+
+    return selected_path;
+}
+
+UecMpRandom::UecMpRandom(uint16_t no_of_paths, bool debug)
+    : UecMultipath(debug),
+      _no_of_paths(no_of_paths) {
+
+    if (_debug)
+        cout << "Multipath"
+             << " Random"
+             << " _no_of_paths " << _no_of_paths
+             << endl;
+}
+
+void UecMpRandom::processEv(uint16_t path_id, PathFeedback feedback) {
+    return;
+}
+
+uint16_t UecMpRandom::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
+    uint16_t selected_path = rand() % 65536;
+
+    if (_debug) {
+        cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
+             << " Random nextEntropy selected_path " << selected_path << endl;
     }
 
     return selected_path;

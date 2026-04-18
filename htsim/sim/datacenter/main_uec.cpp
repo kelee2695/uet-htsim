@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
     bool enable_lossless_ecn = false;
     int lossless_ecn_threshold = 0;
 
-    enum LoadBalancing_Algo { BITMAP, REPS, REPS_LEGACY, OBLIVIOUS, MIXED, HASHX};
+    enum LoadBalancing_Algo { BITMAP, REPS, REPS_LEGACY, OBLIVIOUS, MIXED, HASHX, RANDOM};
     LoadBalancing_Algo load_balancing_algo = MIXED;
 
     bool log_sink = false;
@@ -251,8 +251,11 @@ int main(int argc, char **argv) {
             else if (!strcmp(argv[i+1], "hashx")) {
                 load_balancing_algo = HASHX;
             }
+            else if (!strcmp(argv[i+1], "random")) {
+                load_balancing_algo = RANDOM;
+            }
             else {
-                cout << "Unknown load balancing algorithm of type " << argv[i+1] << ", expecting bitmap, reps, reps_legacy, oblivious, mixed or hashx" << endl;
+                cout << "Unknown load balancing algorithm of type " << argv[i+1] << ", expecting bitmap, reps, reps_legacy, oblivious, mixed, hashx or random" << endl;
                 exit_error(argv[0]);
             }
             cout << "Load balancing algorithm set to  "<< argv[i+1] << endl;
@@ -886,6 +889,8 @@ int main(int argc, char **argv) {
                 mp = make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == HASHX){
                 mp = make_unique<UecMpHashx>(path_entropy_size, UecSrc::_debug, src, dest, ecn_low, ecn_high);
+            } else if (load_balancing_algo == RANDOM){
+                mp = make_unique<UecMpRandom>(path_entropy_size, UecSrc::_debug);
             } else {
                 cout << "ERROR: Failed to set multipath algorithm, abort." << endl;
                 abort();
