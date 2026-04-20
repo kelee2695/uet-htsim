@@ -7,9 +7,10 @@ import numpy as np
 
 
 def parse_log_file(filepath):
-    """解析日志文件，返回每个队列每次统计的累积到达包数"""
+    """解析日志文件，返回每个队列每次统计的累积到达包数和队列深度"""
     queue_names = {}
     queue_samples = {}
+    queue_depth_samples = {}
 
     with open(filepath, 'r') as f:
         for line in f:
@@ -31,7 +32,16 @@ def parse_log_file(filepath):
                     cum_arr = int(match.group(1))
                     queue_samples.setdefault(queue_id, []).append((timestamp, cum_arr))
 
-    return {'names': queue_names, 'samples': queue_samples}
+            if 'Ev RANGE' in line:
+                time_match = re.search(r'^(\d+\.\d+)', line)
+                timestamp = float(time_match.group(1)) if time_match else 0.0
+                
+                match = re.search(r'MaxQ (\d+)', line)
+                if match:
+                    max_q = int(match.group(1))
+                    queue_depth_samples.setdefault(queue_id, []).append((timestamp, max_q))
+
+    return {'names': queue_names, 'samples': queue_samples, 'depth_samples': queue_depth_samples}
 
 
 def normalize_queue_name(name):
@@ -163,6 +173,42 @@ def generate_csv(exp_dir, data):
     return output_file
 
 
+def generate_queue_depth_csv(exp_dir, data):
+    """生成队列深度CSV文件：每时刻各队列的队列深度"""
+    names = data['names']
+    depth_samples = data['depth_samples']
+    
+    # 统一队列名并去重
+    queue_names = list({normalize_queue_name(names[qid]) for qid in depth_samples if qid in names})
+    queue_names.sort(key=parse_queue_name)
+    
+    # 收集所有时间戳
+    timestamps = sorted({ts for qid in depth_samples for ts, _ in depth_samples[qid]})
+    
+    # 构建数据: timestamp -> {queue_name -> depth}
+    data_by_time = {ts: {} for ts in timestamps}
+    for qid, sample_list in depth_samples.items():
+        if qid not in names:
+            continue
+        qname = normalize_queue_name(names[qid])
+        for ts, depth in sample_list:
+            data_by_time[ts][qname] = depth
+    
+    # 写入CSV
+    output_file = os.path.join(exp_dir, 'queue_depth.csv')
+    with open(output_file, 'w') as f:
+        # 表头
+        f.write('Timestamp,' + ','.join(queue_names) + '\n')
+        
+        # 数据行
+        for ts in timestamps:
+            line = str(ts) + ',' + ','.join(str(data_by_time[ts].get(q, 0)) for q in queue_names)
+            f.write(line + '\n')
+    
+    print(f"Saved: {output_file}")
+    return output_file
+
+
 def analyze_experiment(exp_dir, exp_name):
     """分析单个实验"""
     log_file = os.path.join(exp_dir, 'result_parsed.log')
@@ -175,7 +221,8 @@ def analyze_experiment(exp_dir, exp_name):
         return None
 
     output_file = generate_csv(exp_dir, data)
-    return {'name': exp_name, 'output_file': output_file}
+    depth_output_file = generate_queue_depth_csv(exp_dir, data)
+    return {'name': exp_name, 'output_file': output_file, 'depth_output_file': depth_output_file}
 
 
 def read_jain_indices(csv_file):
@@ -329,6 +376,7 @@ def main():
     print(f"\nGenerated {len(results)} CSV files:")
     for r in results:
         print(f"  - {r['output_file']}")
+        print(f"  - {r['depth_output_file']}")
     
     # 生成箱线图总结
     if results:

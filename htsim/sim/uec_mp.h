@@ -106,7 +106,7 @@ private:
 class UecMpHashx : public UecMultipath {
 public:
     UecMpHashx(uint16_t no_of_paths, bool debug, uint32_t src = 0, uint32_t dst = 0,
-               uint64_t ecn_low = 0, uint64_t ecn_high = 0);
+               uint64_t ecn_low = 0, uint64_t ecn_high = 0, uint32_t max_weight = 8);
     void processEv(uint16_t path_id, PathFeedback feedback) override;
     void processEv(uint16_t path_id, uint64_t queue_size_low, uint64_t queue_size_high, int ecn_tag) override;
     uint16_t nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) override;
@@ -118,6 +118,7 @@ private:
     uint32_t _dst;               // destination host ID
     uint64_t _ecn_low;           // ECN low threshold (in bytes)
     uint64_t _ecn_high;          // ECN high threshold (in bytes)
+    uint32_t _max_weight;        // maximum weight value (default: 8)
 };
 
 class UecMpRandom : public UecMultipath {

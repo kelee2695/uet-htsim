@@ -433,6 +433,27 @@ Route* FatTreeSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port){
                          << " selected_port=" << ecmp_choice << endl;
                 }
                 break;
+            case ECMP_DATA_4TUPLE:
+                // 对DATA包使用src, dst, flowid, pathid四元组做hash选路
+                // 其他包使用默认的ECMP hash
+                if (pkt.type() == UECDATA) {
+                    // 获取源地址 - 对于UecDataPacket，需要通过dynamic_cast获取
+                    UecDataPacket* data_pkt = dynamic_cast<UecDataPacket*>(&pkt);
+                    if (data_pkt) {
+                        uint32_t src = data_pkt->get_src();
+                        uint32_t dst = pkt.dst();
+                        uint32_t flowid = pkt.flow_id();
+                        uint32_t pathid = pkt.pathid();
+                        ecmp_choice = freeBSDHash(src, dst, flowid ^ pathid) % available_hops->size();
+                    } else {
+                        // 如果转换失败，回退到标准ECMP
+                        ecmp_choice = freeBSDHash(pkt.flow_id(), pkt.pathid(), _hash_salt) % available_hops->size();
+                    }
+                } else {
+                    // 非DATA包使用标准ECMP hash
+                    ecmp_choice = freeBSDHash(pkt.flow_id(), pkt.pathid(), _hash_salt) % available_hops->size();
+                }
+                break;
             }
         
         FibEntry* e = (*available_hops)[ecmp_choice];

@@ -138,6 +138,7 @@ int main(int argc, char **argv) {
     char* topo_file = NULL;
     int8_t qa_gate = -1;
     bool conn_reuse = false;
+    uint32_t hashx_max_weight = 8;  // default max weight for Hashx
 
     while (i<argc) {
         if (!strcmp(argv[i],"-o")) {
@@ -147,6 +148,10 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-conn_reuse")){
             conn_reuse = true;
             cout << "Enabling connection reuse" << endl;
+        } else if (!strcmp(argv[i],"-hashx_weight")) {
+            hashx_max_weight = atoi(argv[i+1]);
+            cout << "Hashx max weight set to " << hashx_max_weight << endl;
+            i++;
         } else if (!strcmp(argv[i],"-end")) {
             end_time = atoi(argv[i+1]);
             cout << "endtime(us) "<< end_time << endl;
@@ -559,6 +564,11 @@ int main(int argc, char **argv) {
                 route_strategy = ECMP_FIB;
                 FatTreeSwitch::set_strategy(FatTreeSwitch::HASHX);
                 cout << "Using HASHX routing strategy (first available port)" << endl;
+            } else if (!strcmp(argv[i+1], "ecmp_data_4tuple")) {
+                // ECMP_DATA_4TUPLE: use src, dst, flowid, pathid for DATA packets
+                route_strategy = ECMP_FIB;
+                FatTreeSwitch::set_strategy(FatTreeSwitch::ECMP_DATA_4TUPLE);
+                cout << "Using ECMP_DATA_4TUPLE routing strategy (src,dst,flowid,pathid hash for DATA packets)" << endl;
             }
             i++;
         } else {
@@ -888,7 +898,7 @@ int main(int argc, char **argv) {
             } else if (load_balancing_algo == MIXED){
                 mp = make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == HASHX){
-                mp = make_unique<UecMpHashx>(path_entropy_size, UecSrc::_debug, src, dest, ecn_low, ecn_high);
+                mp = make_unique<UecMpHashx>(path_entropy_size, UecSrc::_debug, src, dest, ecn_low, ecn_high, hashx_max_weight);
             } else if (load_balancing_algo == RANDOM){
                 mp = make_unique<UecMpRandom>(path_entropy_size, UecSrc::_debug);
             } else {

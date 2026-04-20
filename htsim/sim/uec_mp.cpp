@@ -288,14 +288,15 @@ uint16_t UecMpMixed::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
 }
 
 UecMpHashx::UecMpHashx(uint16_t no_of_paths, bool debug, uint32_t src, uint32_t dst,
-                       uint64_t ecn_low, uint64_t ecn_high)
+                       uint64_t ecn_low, uint64_t ecn_high, uint32_t max_weight)
     : UecMultipath(debug),
       _no_of_paths(no_of_paths),
       _path_weights(),
       _src(src),
       _dst(dst),
       _ecn_low(ecn_low),
-      _ecn_high(ecn_high)
+      _ecn_high(ecn_high),
+      _max_weight(max_weight)
       {
     // 使用 src 和 dst 计算初始路径（使用大质数增加哈希分散性）
     // const uint32_t HASH_PRIME = 2654435761u;  // 大质数
@@ -304,7 +305,7 @@ UecMpHashx::UecMpHashx(uint16_t no_of_paths, bool debug, uint32_t src, uint32_t 
 
     _path_weights.resize(_no_of_paths);
     for (uint32_t i = 0; i < _no_of_paths; i++) {
-        _path_weights[i] = 8;
+        _path_weights[i] = _max_weight;
     }
 
     if (_debug)
@@ -316,6 +317,7 @@ UecMpHashx::UecMpHashx(uint16_t no_of_paths, bool debug, uint32_t src, uint32_t 
              << " initial_path " << _current_path
              << " ecn_low " << _ecn_low
              << " ecn_high " << _ecn_high
+             << " max_weight " << _max_weight
              << endl;
 }
 
@@ -343,22 +345,22 @@ void UecMpHashx::processEv(uint16_t path_id, uint64_t queue_size_low, uint64_t q
         if (path_id < _no_of_paths) {
             int new_weight = 0;
             if (_ecn_high > _ecn_low) {
-                // Calculate: 8 * (1 - (queue_low - ecn_low) / (ecn_high - ecn_low))
+                // Calculate: _max_weight * (1 - (queue_low - ecn_low) / (ecn_high - ecn_low))
                 if (queue_size_low <= _ecn_low) {
-                    new_weight = 8;  // Queue below low threshold, full weight
+                    new_weight = _max_weight;  // Queue below low threshold, full weight
                 } else if (queue_size_low >= _ecn_high) {
                     new_weight = 0;  // Queue above high threshold, zero weight
                 } else {
-                    // Linear interpolation: weight = 8 * (1 - (queue_low - ecn_low) / (ecn_high - ecn_low))
-                    uint64_t numerator = 8 * (_ecn_high - queue_size_low);
+                    // Linear interpolation: weight = _max_weight * (1 - (queue_low - ecn_low) / (ecn_high - ecn_low))
+                    uint64_t numerator = _max_weight * (_ecn_high - queue_size_low);
                     uint64_t denominator = _ecn_high - _ecn_low;
                     new_weight = (int)(numerator / denominator);
                     if (new_weight < 0) new_weight = 0;
-                    if (new_weight > 8) new_weight = 8;
+                    if (new_weight > (int)_max_weight) new_weight = _max_weight;
                 }
             } else {
                 // Invalid thresholds, use default
-                new_weight = 8;
+                new_weight = _max_weight;
             }
             _path_weights[path_id] = new_weight;
             if (_debug) {
@@ -385,8 +387,8 @@ void UecMpHashx::processEv(uint16_t path_id, uint64_t queue_size_low, uint64_t q
 uint16_t UecMpHashx::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
     uint16_t selected_path = _current_path;
 
-    // Check if current path weight is less than 8, increment and skip
-    while (_path_weights[selected_path] < 8) {
+    // Check if current path weight is less than _max_weight, increment and skip
+    while (_path_weights[selected_path] < (int)_max_weight) {
         if (_debug) {
             cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag
                  << " Hashx nextEntropy path " << selected_path
@@ -427,7 +429,7 @@ void UecMpRandom::processEv(uint16_t path_id, PathFeedback feedback) {
 }
 
 uint16_t UecMpRandom::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
-    uint16_t selected_path = rand() % 65536;
+    uint16_t selected_path = random() % 65536;
 
     if (_debug) {
         cout << timeAsUs(EventList::getTheEventList().now()) << " " << _debug_tag

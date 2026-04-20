@@ -10,6 +10,7 @@
         "-log", "nic",
         "-logtime_us", "20",
         "-sender_cc_algo", "constant",
+        "-strat", "ecmp_data_4tuple",
         "-queue_type", "composite",
         "-end", "0",
         "-q", "300"

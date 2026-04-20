@@ -55,33 +55,25 @@ analyze_one() {
         "$PARSE_OUTPUT" "$dir/result.log" -ascii > "$dir/result_parsed.log" 2>&1
     fi
     
-    # 提取流映射
-    if [[ ! -f "$dir/cwnd_flow_map.txt" ]]; then
-        python3 "$SCRIPT_DIR/extract_flow_mapping.py" -i "$dir/result.txt" -o "$dir/cwnd_flow_map.txt" >/dev/null 2>&1
-    fi
+    # 提取流映射（每次更新）
+    python3 "$SCRIPT_DIR/extract_flow_mapping.py" -i "$dir/result.txt" -o "$dir/cwnd_flow_map.txt" >/dev/null 2>&1
     
-    # 分析拥塞窗口
-    if [[ ! -f "$dir/cwnd_change.csv" ]] || [[ ! -f "$dir/cwnd_events.txt" ]]; then
-        python3 "$SCRIPT_DIR/analyze_cwnd.py" -i "$dir/result.txt" -m "$dir/cwnd_flow_map.txt" -o "$dir/cwnd_change.csv" -e "$dir/cwnd_events.txt" >/dev/null 2>&1
-    fi
+    # 分析拥塞窗口（每次更新）
+    python3 "$SCRIPT_DIR/analyze_cwnd.py" -i "$dir/result.txt" -m "$dir/cwnd_flow_map.txt" -o "$dir/cwnd_change.csv" -e "$dir/cwnd_events.txt" >/dev/null 2>&1
     
-    # 绘制拥塞窗口图
-    if [[ ! -f "$dir/cwnd_plot.png" ]]; then
-        python3 "$SCRIPT_DIR/plot_cwnd.py" -i "$dir/cwnd_change.csv" -o "$dir/cwnd_plot.png" -n 5 >/dev/null 2>&1
-    fi
+    # 绘制拥塞窗口图（每次更新）
+    python3 "$SCRIPT_DIR/plot_cwnd.py" -i "$dir/cwnd_change.csv" -o "$dir/cwnd_plot.png" -n 5 >/dev/null 2>&1
     
-    # 分析发送速率
-    if [[ ! -f "$dir/send_rate_per_flow.csv" ]] || [[ ! -f "$dir/send_rate_per_node.csv" ]]; then
-        python3 "$SCRIPT_DIR/analyze_send_rate.py" -i "$dir/result.txt" -o "$dir/send_rate_per_flow.csv" -n "$dir/send_rate_per_node.csv" >/dev/null 2>&1
-    fi
+    # 分析发送速率（每次更新）
+    python3 "$SCRIPT_DIR/analyze_send_rate.py" -i "$dir/result.txt" -o "$dir/send_rate_per_flow.csv" -n "$dir/send_rate_per_node.csv" >/dev/null 2>&1
     
-    # 分析接收速率
-    if [[ -f "$dir/result_parsed.log" ]] && [[ ! -f "$dir/receive_rate.csv" ]]; then
+    # 分析接收速率（每次更新）
+    if [[ -f "$dir/result_parsed.log" ]]; then
         python3 "$SCRIPT_DIR/analyze_receive_rate.py" -i "$dir/result_parsed.log" -o "$dir/receive_rate.csv" >/dev/null 2>&1
     fi
     
-    # 数据包在网时延统计
-    if [[ -f "$dir/cwnd_flow_map.txt" ]] && [[ ! -f "$dir/network_delay_stats.csv" ]]; then
+    # 数据包在网时延统计（每次更新）
+    if [[ -f "$dir/cwnd_flow_map.txt" ]]; then
         python3 "$SCRIPT_DIR/analyze_network_delay.py" "$dir/result.txt" "$dir/cwnd_flow_map.txt" "$dir/network_delay_stats.csv" >/dev/null 2>&1
     fi
     
@@ -92,6 +84,17 @@ analyze_one() {
 run_analysis() {
     echo "生成队列分析报告..."
     python3 "$SCRIPT_DIR/analyze_queues.py" -i "$EXPERIMENT_RESULT_DIR" >/dev/null 2>&1
+    
+    # 为每个实验生成队列深度阈值统计
+    echo "生成队列深度阈值统计..."
+    for exp_dir in "$EXPERIMENT_RESULT_DIR"/*/; do
+        if [[ -f "$exp_dir/queue_depth.csv" ]]; then
+            python3 "/home/lrh/uet-htsim/test_hw/script/count_threshold.py" \
+                -i "$exp_dir/queue_depth.csv" \
+                -o "$exp_dir/queue_depth_threshold.csv" \
+                -t 1245000 >/dev/null 2>&1
+        fi
+    done
 }
 
 while IFS='|' read -r name logf; do
