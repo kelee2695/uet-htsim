@@ -1,7 +1,5 @@
 #!/bin/bash
 
-BASE_DIR="/home/lrh/uet-htsim/test_hw/2spine_4leaf_256"
-RESULT_DIR="${BASE_DIR}/result"
 SCRIPT_DIR="/home/lrh/uet-htsim/test_hw/script"
 PARSE_OUTPUT="/home/lrh/uet-htsim/htsim/sim/build/parse_output"
 MAX_CONCURRENT=${2:-6}
@@ -11,26 +9,50 @@ msg() { echo -e "${GREEN}✓${NC} $1"; }
 err() { echo -e "${RED}✗${NC} $1"; }
 inf() { echo -e "${BLUE}ℹ${NC} $1"; }
 
-[[ $# -eq 0 ]] && { echo "用法: $0 <实验组文件> [并发数]"; ls "${BASE_DIR}"/experiment_group_*.json 2>/dev/null | xargs -n1 basename; exit 1; }
+[[ $# -eq 0 ]] && { echo "用法: $0 <实验组文件.json> [并发数]"; exit 1; }
 
-EXPERIMENT_GROUP="${BASE_DIR}/$1"
+EXPERIMENT_GROUP="$1"
 [[ ! -f "$EXPERIMENT_GROUP" ]] && { err "文件不存在: $EXPERIMENT_GROUP"; exit 1; }
+
+BASE_DIR=$(dirname "$EXPERIMENT_GROUP")
+RESULT_DIR="${BASE_DIR}/result"
 
 EXPERIMENT_RESULT_DIR="${RESULT_DIR}_$(basename "$EXPERIMENT_GROUP" .json | sed 's/^experiment_group_//')"
 mkdir -p "$EXPERIMENT_RESULT_DIR"
 
 echo -e "${BLUE}并发: ${MAX_CONCURRENT} | 实验组: $(basename "$EXPERIMENT_GROUP") | 结果: ${EXPERIMENT_RESULT_DIR}${NC}\n"
 
-STATUS_FILE="/tmp/exp_status_$$.txt"
-PIDS_FILE="/tmp/exp_pids_$$.txt"
-EXPS_FILE="/tmp/exps_$$.txt"
+STATUS_FILE="/tmp/exp_status_$.txt"
+PIDS_FILE="/tmp/exp_pids_$.txt"
+EXPS_FILE="/tmp/exps_$.txt"
 > "$STATUS_FILE" > "$PIDS_FILE"
 
 python3 -c "
 import json
+import os
+
+base_dir = os.path.dirname('${EXPERIMENT_GROUP}')
+
 with open('${EXPERIMENT_GROUP}') as f:
     for exp in json.load(f).get('experiments', []):
-        cmd = exp['command'] + ' ' + ' '.join(exp['args'])
+        args_list = exp.get('args', [])
+        
+        # 转换相对路径为绝对路径
+        new_args = []
+        for arg in args_list:
+            if arg.startswith('-'):
+                new_args.append(arg)
+            elif os.path.isabs(arg):
+                new_args.append(arg)
+            else:
+                # 尝试相对于base_dir解析
+                full_path = os.path.join(base_dir, arg)
+                if os.path.exists(full_path):
+                    new_args.append(os.path.abspath(full_path))
+                else:
+                    new_args.append(arg)
+        
+        cmd = exp['command'] + ' ' + ' '.join(new_args)
         if exp.get('log'): cmd += ' -o ' + exp['log']
         print(f\"{exp['name']}|{cmd}|{exp['output']}|{exp.get('log','')}\")
 " > "$EXPS_FILE"
@@ -41,14 +63,30 @@ run_one() {
     
     inf "开始实验: $name"
     
+    # 将结果和日志路径转换为绝对路径
+    local abs_result abs_logf
+    if [[ "$result" == /* ]]; then
+        abs_result="$result"
+    else
+        abs_result="${BASE_DIR}/$result"
+    fi
+    
+    if [[ -n "$logf" ]]; then
+        if [[ "$logf" == /* ]]; then
+            abs_logf="$logf"
+        else
+            abs_logf="${BASE_DIR}/$logf"
+        fi
+    fi
+    
     # 运行实验
-    if eval "$cmd > \"$result\"" 2>/dev/null && [[ -f "$result" ]]; then
+    if eval "$cmd > \"$abs_result\"" 2>/dev/null && [[ -f "$abs_result" ]]; then
         # 拷贝结果文件
-        mv "$result" "$dir/result.txt"
+        mv "$abs_result" "$dir/result.txt"
         
         # 拷贝并解析 log 文件
-        if [[ -f "$logf" ]]; then
-            mv "$logf" "$dir/result.log"
+        if [[ -n "$abs_logf" && -f "$abs_logf" ]]; then
+            mv "$abs_logf" "$dir/result.log"
             # 解析 log 文件
             "$PARSE_OUTPUT" "$dir/result.log" -ascii > "$dir/result_parsed.log" 2>&1
         fi

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-BASE_DIR="/home/lrh/uet-htsim/test_hw/2spine_4leaf_256"
-RESULT_DIR="${BASE_DIR}/result"
 SCRIPT_DIR="/home/lrh/uet-htsim/test_hw/script_result_along"
 PARSE_OUTPUT="/home/lrh/uet-htsim/htsim/sim/build/parse_output"
 MAX_CONCURRENT=${2:-6}
@@ -11,10 +9,13 @@ msg() { echo -e "${GREEN}✓${NC} $1"; }
 err() { echo -e "${RED}✗${NC} $1"; }
 inf() { echo -e "${BLUE}ℹ${NC} $1"; }
 
-[[ $# -eq 0 ]] && { echo "用法: $0 <实验组文件> [并发数]"; ls "${BASE_DIR}"/experiment_group_*.json 2>/dev/null | xargs -n1 basename; exit 1; }
+[[ $# -eq 0 ]] && { echo "用法: $0 <实验组文件.json> [并发数]"; exit 1; }
 
-EXPERIMENT_GROUP="${BASE_DIR}/$1"
+EXPERIMENT_GROUP="$1"
 [[ ! -f "$EXPERIMENT_GROUP" ]] && { err "文件不存在: $EXPERIMENT_GROUP"; exit 1; }
+
+BASE_DIR=$(dirname "$EXPERIMENT_GROUP")
+RESULT_DIR="${BASE_DIR}/result"
 
 EXPERIMENT_RESULT_DIR="${RESULT_DIR}_$(basename "$EXPERIMENT_GROUP" .json | sed 's/^experiment_group_//')"
 [[ ! -d "$EXPERIMENT_RESULT_DIR" ]] && { err "结果目录不存在: $EXPERIMENT_RESULT_DIR"; exit 1; }
