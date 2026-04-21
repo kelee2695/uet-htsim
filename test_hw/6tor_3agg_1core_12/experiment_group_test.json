@@ -23,6 +23,53 @@
       "log": "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/result/result_nscc_composite.log"
     },
     {
+      "name": "nscc_composite_enable_fastcn",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "args": [
+        "-tm", "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/connection_matrics/test.cm",
+        "-topo", "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/6tor_3agg_1core_12.topo",
+        "-debug",
+        "-log", "nic",
+        "-log", "tor_downqueue",
+        "-logtime_us", "10",
+        "-load_balancing_algo", "bitmap",
+        "-strat","ecmp_host",
+        "-sender_cc_algo", "nscc",
+        "-enable_fastcn",
+        "-queue_type", "composite",
+        "-linkspeed", "100000",
+        "-log", "cwnd",
+        "-end", "0",
+        "-q", "300"
+      ],
+      "output": "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/result/result_nscc_composite_enable_fastcn.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/result/result_nscc_composite_enable_fastcn.log"
+    },
+    {
+      "name": "nscc_composite_enable_fastcn_nscc_fastcn",
+      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "args": [
+        "-tm", "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/connection_matrics/test.cm",
+        "-topo", "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/6tor_3agg_1core_12.topo",
+        "-debug",
+        "-log", "nic",
+        "-log", "tor_downqueue",
+        "-logtime_us", "10",
+        "-load_balancing_algo", "bitmap",
+        "-strat","ecmp_host",
+        "-sender_cc_algo", "nscc",
+        "-enable_fastcn",
+        "-nscc_fastcn",
+        "-queue_type", "composite",
+        "-linkspeed", "100000",
+        "-log", "cwnd",
+        "-end", "0",
+        "-q", "300"
+      ],
+      "output": "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/result/result_nscc_composite_enable_fastcn_nscc_fastcn.txt",
+      "log": "/home/lrh/uet-htsim/test_hw/6tor_3agg_1core_12/result/result_nscc_composite_enable_fastcn_nscc_fastcn.log"
+    },
+    {
       "name": "nscc_composite_origin",
       "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec_origin",
       "args": [

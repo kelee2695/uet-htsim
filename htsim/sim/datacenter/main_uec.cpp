@@ -227,6 +227,9 @@ int main(int argc, char **argv) {
             UecSrc::_z_incast_n = atof(argv[i+1]);
             cout << "Setting Z-INCAST N to " << UecSrc::_z_incast_n << endl;
             i++;
+        } else if (!strcmp(argv[i],"-nscc_fastcn")) {
+            UecSrc::_nscc_fastcn = true;
+            cout << "NSCC fast congestion response enabled" << endl;
         } else if (!strcmp(argv[i],"-sender_cc")) {
             UecSrc::_sender_based_cc = true;
             UecSink::_oversubscribed_cc = false;

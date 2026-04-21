@@ -90,6 +90,10 @@ double UecSrc::_z_incast_b = 100.0;    // 默认b值
 double UecSrc::_z_incast_n = 1.0;      // 默认N值
 /* End Z-INCAST parameters */
 
+/* NSCC parameters */
+bool UecSrc::_nscc_fastcn = false;     // 默认关闭快速拥塞响应
+/* End NSCC parameters */
+
 void UecSrc::initNsccParams(simtime_picosec network_rtt,
                             linkspeed_bps linkspeed,
                             simtime_picosec target_Qdelay,
@@ -1446,13 +1450,21 @@ void UecSrc::updateCwndOnAck_NSCC(bool skip, simtime_picosec delay, mem_b newly_
         if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
             cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " proportional_increase _nscc_cwnd " << _cwnd << endl;
         }
-    } else if (skip && delay >= _target_Qdelay) {    
-        multiplicative_decrease();
-        if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
-            cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " multiplicative_decrease _nscc_cwnd " << _cwnd << endl;
+    } else if (skip && delay >= _target_Qdelay) {
+        // NSCC快速拥塞响应：有ECN且延迟高时乘性减窗
+        // 仅在未开启nscc_fastcn时通过ACK处理（开启时由ECN Notify处理）
+        if (!_nscc_fastcn) {
+            multiplicative_decrease();
+            if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+                cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " multiplicative_decrease _nscc_cwnd " << _cwnd << endl;
+            }
         }
     } else if (skip && delay < _target_Qdelay) {
-        // NOOP, just switch path
+        // NSCC快速拥塞响应：有ECN但延迟低时仅切换路径（NOOP）
+        // 仅在未开启nscc_fastcn时处理（开启时由ECN Notify处理）
+        if (!_nscc_fastcn) {
+            // NOOP, just switch path
+        }
     }
 
     // Check here, fulfill_adjustment requires valid cwnd.
@@ -1513,13 +1525,52 @@ void UecSrc::updateCwndOnNack_NSCC(bool skip, mem_b nacked_bytes, bool last_hop)
 
 void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
     // NSCC: 基于ECN标记进行窗口调整
-    // 这里可以实现NSCC特定的ECN处理逻辑
-    // 目前先做空实现，可以根据需要添加
+    // 使用 cnp_psn 查找发送记录，计算 RTT（只读，不更新 base_rtt 和 avg_delay）
+    UecDataPacket::seq_t cnp_psn = pkt.cnp_psn();
+    simtime_picosec raw_rtt = 0;
+    simtime_picosec delay = 0;
+    bool found_record = false;
+    
+    // 查找发送记录，仅用于计算当前排队延迟（不更新 base_rtt）
+    auto i = _tx_bitmap.find(cnp_psn);
+    if (i != _tx_bitmap.end()) {
+        found_record = true;
+        simtime_picosec send_time = i->second.send_time;
+        raw_rtt = eventlist().now() - send_time;
+        
+        // 只计算排队延迟，不更新 base_rtt 和 avg_delay
+        // 因为 ECN Notify 在拥塞时触发，raw_rtt 包含排队延迟，不适合更新 base_rtt
+        if (raw_rtt >= _base_rtt) {
+            delay = raw_rtt - _base_rtt;
+        } else {
+            delay = 0;  // 不应该小于0
+        }
+    } else {
+        // 找不到记录，使用平均延迟
+        delay = get_avg_delay();
+    }
+    
     if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
         cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
-             << " NSCC ECN_NOTIFY ecn_tag=" << pkt.ecn_tag()
+             << " NSCC ECN_NOTIFY cnp_psn=" << cnp_psn
+             << " found_record=" << found_record
+             << " raw_rtt=" << timeAsUs(raw_rtt)
+             << " delay=" << timeAsUs(delay)
+             << " base_rtt=" << timeAsUs(_base_rtt)
+             << " ecn_tag=" << pkt.ecn_tag()
              << " queue_size_low=" << pkt.queue_size_low()
              << " queue_size_high=" << pkt.queue_size_high() << endl;
+    }
+    
+    // NSCC快速拥塞响应：基于 delay 和 ecn_tag 进行窗口调整
+    if (_nscc_fastcn) {
+        // 与ACK路径逻辑保持一致：ECN标记被设置且延迟高时乘性减窗
+        if (pkt.ecn_tag() && delay >= _target_Qdelay) {
+            multiplicative_decrease();
+            if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+                cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " multiplicative_decrease _nscc_cwnd " << _cwnd << endl;
+            }
+        }
     }
 }
 

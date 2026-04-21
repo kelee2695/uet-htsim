@@ -222,7 +222,8 @@ void CompositeQueue::mark_ECN(Packet& pkt, bool on_enqueue) {
                     pkt.flow(), ecn_notify_dst,
                     ecn_notify_flow_id, pkt.pathid(),
                     _queuesize_low, _queuesize_high, _ecn_tag,
-                    we_w_ratio
+                    we_w_ratio,
+                    uec_pkt->epsn()  // Pass the PSN of the packet that triggered CNP
                 );
                 _switch->receivePacket(*ecn_notify);
                 
@@ -234,6 +235,7 @@ void CompositeQueue::mark_ECN(Packet& pkt, bool on_enqueue) {
                     << " w=" << _w
                     << " we=" << _we
                     << " we_w_ratio=" << we_w_ratio
+                    << " cnp_psn=" << uec_pkt->epsn()
                     << endl;
             }
         }

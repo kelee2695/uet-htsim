@@ -385,7 +385,8 @@ public:
     inline static UecEcnNotifyPacket* newpkt(PacketFlow& flow,
                                               uint32_t dst, flowid_t flow_id, uint32_t path_id,
                                               mem_b queue_size_low, mem_b queue_size_high, int ecn_tag,
-                                              double we_w_ratio = 0.0) {
+                                              double we_w_ratio = 0.0,
+                                              seq_t cnp_psn = 0) {
         UecEcnNotifyPacket* p = _packetdb.allocPacket();
         p->set_attrs(flow, ACKSIZE, 0);
         // Note: No set_route() call here. ECN notification packets don't have a predefined route.
@@ -404,6 +405,7 @@ public:
         p->_ecn_tag = ecn_tag;
         p->_we_w_ratio = we_w_ratio;
         p->_ev = path_id;  // Store the data packet's path_id for congestion control
+        p->_cnp_psn = cnp_psn;  // PSN of the packet that triggered CNP
         return p;
     }
 
@@ -417,6 +419,7 @@ public:
     inline int ecn_tag() const { return _ecn_tag; }
     inline double we_w_ratio() const { return _we_w_ratio; }
     inline uint32_t ev() const { return _ev; }  // Return the data packet's path_id
+    inline seq_t cnp_psn() const { return _cnp_psn; }  // Return the PSN of the packet that triggered CNP
 
     virtual PktPriority priority() const { return Packet::PRIO_HI; }
 
@@ -429,6 +432,7 @@ protected:
     int _ecn_tag;
     double _we_w_ratio;
     uint32_t _ev;  // Path ID of the data packet that triggered ECN (for congestion control)
+    seq_t _cnp_psn;  // PSN of the data packet that triggered CNP
     static PacketDB<UecEcnNotifyPacket> _packetdb;
 };
 

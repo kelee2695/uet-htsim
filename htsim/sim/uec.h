@@ -390,6 +390,8 @@ public:
     static double _z_incast_alpha;  // 平滑因子a
     static double _z_incast_b;      // b值，在初始化时计算: b = 初始窗口 / N
     static double _z_incast_n;      // N值，从命令行输入
+    // NSCC parameters
+    static bool _nscc_fastcn;       // 开启NSCC快速拥塞响应
     //debug
     static flowid_t _debug_flowid;
 private:
