@@ -68,6 +68,11 @@ analyze_one() {
     # 分析发送速率（每次更新）
     python3 "$SCRIPT_DIR/analyze_send_rate.py" -i "$dir/result.txt" -o "$dir/send_rate_per_flow.csv" -n "$dir/send_rate_per_node.csv" >/dev/null 2>&1
     
+    # 绘制发送速率图（每次更新）
+    if [[ -f "$dir/send_rate_per_flow.csv" ]]; then
+        python3 "$SCRIPT_DIR/plot_send_rate.py" -i "$dir/send_rate_per_flow.csv" -o "$dir/send_rate_plot.png" -n 5 >/dev/null 2>&1
+    fi
+    
     # 分析接收速率（每次更新）
     if [[ -f "$dir/result_parsed.log" ]]; then
         python3 "$SCRIPT_DIR/analyze_receive_rate.py" -i "$dir/result_parsed.log" -o "$dir/receive_rate.csv" >/dev/null 2>&1

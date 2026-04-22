@@ -70,6 +70,7 @@ def plot_cwnd(csv_file, output_file, num_flows=5, seed=None):
     ax.set_title(f'Congestion Window Changes ({len(selected_flows)} flows)', fontsize=14)
     ax.legend(loc='best', fontsize=9)
     ax.grid(True, alpha=0.3)
+    ax.set_ylim(bottom=0)  # 纵坐标起点固定为0
     
     # 调整布局
     plt.tight_layout()

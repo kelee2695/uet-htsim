@@ -1,4 +1,4 @@
-Nodes 12
+Nodes 16
 Tiers 3
 Podsize 4
 
@@ -20,6 +20,6 @@ Switch_Latency_ns 100
 
 Tier 2
 Downlink_speed_Gbps 100
-Radix_Down 3
+Radix_Down 4
 Downlink_Latency_ns 1000
 Switch_Latency_ns 100

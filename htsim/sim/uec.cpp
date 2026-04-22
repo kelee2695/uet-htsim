@@ -1334,11 +1334,14 @@ void UecSrc::fast_increase(uint32_t newly_acked_bytes,simtime_picosec delay){
 void UecSrc::multiplicative_decrease() {
     _increase = false;
     _fi_count = 0;
-    simtime_picosec avg_delay = get_avg_delay();
+    // NSCC fastcn模式使用独立的fastcn_avg_delay
+    simtime_picosec avg_delay = _nscc_fastcn ? get_fastcn_avg_delay() : get_avg_delay();
+    // simtime_picosec avg_delay = get_avg_delay();
     if (avg_delay > _target_Qdelay){
         if (eventlist().now() - _last_dec_time > _base_rtt){
             mem_b before = _cwnd;
-            _cwnd *= max(1-_gamma*(avg_delay-_target_Qdelay)/avg_delay, 0.5);/*_max_md_jump instead of 1*/
+            double md_factor = max(1-_gamma*(avg_delay-_target_Qdelay)/avg_delay, 0.5);/*_max_md_jump instead of 1*/
+            _cwnd *= md_factor;
             _cwnd = max(_cwnd, _min_cwnd);
             _nscc_overall_stats.dec_multi_bytes += before - _cwnd;
             _nscc_fulfill_stats.dec_multi_bytes += before - _cwnd;
@@ -1346,7 +1349,8 @@ void UecSrc::multiplicative_decrease() {
             if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
                 cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
                      << " MULTI_DEC " << before << "->" << _cwnd
-                     << " avg_delay=" << timeAsUs(avg_delay) << " gamma=" << _gamma << endl;
+                     << " avg_delay=" << timeAsUs(avg_delay) << " md_factor=" << md_factor 
+                     << " fastcn=" << _nscc_fastcn << endl;
             }
             _last_dec_time = eventlist().now();
         }
@@ -1525,46 +1529,34 @@ void UecSrc::updateCwndOnNack_NSCC(bool skip, mem_b nacked_bytes, bool last_hop)
 
 void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
     // NSCC: 基于ECN标记进行窗口调整
-    // 使用 cnp_psn 查找发送记录，计算 RTT（只读，不更新 base_rtt 和 avg_delay）
-    UecDataPacket::seq_t cnp_psn = pkt.cnp_psn();
-    simtime_picosec raw_rtt = 0;
+    // 使用队列深度和链路速度计算排队延迟
     simtime_picosec delay = 0;
-    bool found_record = false;
     
-    // 查找发送记录，仅用于计算当前排队延迟（不更新 base_rtt）
-    auto i = _tx_bitmap.find(cnp_psn);
-    if (i != _tx_bitmap.end()) {
-        found_record = true;
-        simtime_picosec send_time = i->second.send_time;
-        raw_rtt = eventlist().now() - send_time;
-        
-        // 只计算排队延迟，不更新 base_rtt 和 avg_delay
-        // 因为 ECN Notify 在拥塞时触发，raw_rtt 包含排队延迟，不适合更新 base_rtt
-        if (raw_rtt >= _base_rtt) {
-            delay = raw_rtt - _base_rtt;
-        } else {
-            delay = 0;  // 不应该小于0
-        }
-    } else {
-        // 找不到记录，使用平均延迟
-        delay = get_avg_delay();
-    }
+    // 从ECN Notify包中获取队列深度（字节）
+    mem_b queue_size = pkt.queue_size_low();
+    
+    // 使用网络链路速度计算排队延迟
+    // delay = queue_size / linkspeed
+    // linkspeed_bps 是比特/秒，需要转换为字节/秒
+    double queue_size_bits = queue_size * 8.0;
+    double delay_seconds = queue_size_bits / (double)_network_linkspeed;
+    delay = timeFromSec(delay_seconds);
     
     if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
         cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
-             << " NSCC ECN_NOTIFY cnp_psn=" << cnp_psn
-             << " found_record=" << found_record
-             << " raw_rtt=" << timeAsUs(raw_rtt)
-             << " delay=" << timeAsUs(delay)
-             << " base_rtt=" << timeAsUs(_base_rtt)
-             << " ecn_tag=" << pkt.ecn_tag()
+             << " NSCC ECN_NOTIFY"
              << " queue_size_low=" << pkt.queue_size_low()
-             << " queue_size_high=" << pkt.queue_size_high() << endl;
+             << " queue_size_high=" << pkt.queue_size_high()
+             << " delay=" << timeAsUs(delay)
+             << " target_Qdelay=" << timeAsUs(_target_Qdelay)
+             << " ecn_tag=" << pkt.ecn_tag() << endl;
     }
     
     // NSCC快速拥塞响应：基于 delay 和 ecn_tag 进行窗口调整
     if (_nscc_fastcn) {
+        update_fastcn_delay(delay + _base_rtt, true, true);
         // 与ACK路径逻辑保持一致：ECN标记被设置且延迟高时乘性减窗
+
         if (pkt.ecn_tag() && delay >= _target_Qdelay) {
             multiplicative_decrease();
             if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
@@ -1711,8 +1703,34 @@ void UecSrc::update_delay(simtime_picosec raw_rtt, bool update_avg, bool skip){
     }
 }
 
+void UecSrc::update_fastcn_delay(simtime_picosec raw_rtt, bool update_avg, bool skip){
+    simtime_picosec delay = raw_rtt - _base_rtt;
+    if(update_avg){
+        if(skip == false && delay > _target_Qdelay){
+            _fastcn_avg_delay = _delay_alpha * _base_rtt*0.25 + (1-_delay_alpha) * _fastcn_avg_delay;
+        }else{
+            if (delay > 5*_base_rtt)
+            {
+                double r = 0.0125;
+                _fastcn_avg_delay = r * delay + (1 - r) * _fastcn_avg_delay;
+            }
+            else
+            {
+                _fastcn_avg_delay = _delay_alpha * delay + (1 - _delay_alpha) * _fastcn_avg_delay;
+            }
+        }
+    }
+    if (_debug_src) {
+        cout << "Update fastcn_delay with sample " << timeAsUs(delay) << " fastcn_avg is " << timeAsUs(_fastcn_avg_delay) << " base rtt is " << _base_rtt << endl;
+    }
+}
+
 simtime_picosec UecSrc::get_avg_delay(){
     return _avg_delay;
+}
+
+simtime_picosec UecSrc::get_fastcn_avg_delay(){
+    return _fastcn_avg_delay;
 }
 
 uint16_t UecSrc::get_avg_pktsize(){

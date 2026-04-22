@@ -404,8 +404,10 @@ private:
     void fulfill_adjustment();
     void mark_packet_for_retransmission(UecBasePacket::seq_t psn, uint16_t pktsize);
     void update_delay(simtime_picosec delay, bool update_avg, bool skip);
+    void update_fastcn_delay(simtime_picosec delay, bool update_avg, bool skip);
     void update_base_rtt(simtime_picosec raw_rtt);
     simtime_picosec get_avg_delay();
+    simtime_picosec get_fastcn_avg_delay();
     uint16_t get_avg_pktsize();
 
     // RTT estimate data for RTO and sender based CC.
@@ -433,6 +435,7 @@ private:
     uint32_t _bytes_ignored = 0;
     uint32_t _inc_bytes = 0;
     simtime_picosec _avg_delay = 0;
+    simtime_picosec _fastcn_avg_delay = 0;  // NSCC fastcn模式专用的平均延迟
 
     simtime_picosec _last_eta_time = 0;
     simtime_picosec _last_adjust_time = 0;
