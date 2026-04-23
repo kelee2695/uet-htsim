@@ -92,13 +92,16 @@ double UecSrc::_z_incast_n = 1.0;      // 默认N值
 
 /* NSCC parameters */
 bool UecSrc::_nscc_fastcn = false;     // 默认关闭快速拥塞响应
+uint64_t UecSrc::_ecn_low = 0;         // ECN低阈值（字节），0表示未设置
+uint64_t UecSrc::_ecn_high = 0;        // ECN高阈值（字节），0表示未设置
 /* End NSCC parameters */
 
 void UecSrc::initNsccParams(simtime_picosec network_rtt,
                             linkspeed_bps linkspeed,
                             simtime_picosec target_Qdelay,
                             int8_t qa_gate,
-                            bool trimming_enabled){
+                            bool trimming_enabled,
+                            uint64_t ecn_low, uint64_t ecn_high){
     _sender_based_cc = true;
                             
     _reference_network_linkspeed = speedFromGbps(100);
@@ -145,6 +148,10 @@ void UecSrc::initNsccParams(simtime_picosec network_rtt,
     _adjust_period_threshold = _network_rtt;
     _adjust_bytes_threshold = 8 * _mtu;
 
+    // 设置ECN阈值
+    _ecn_low = ecn_low;
+    _ecn_high = ecn_high;
+
     cout << "Initializing static NSCC parameters:"
         << " _reference_network_linkspeed=" << _reference_network_linkspeed
         << " _reference_network_rtt=" << _reference_network_rtt
@@ -166,6 +173,8 @@ void UecSrc::initNsccParams(simtime_picosec network_rtt,
         << " _delay_alpha=" << _delay_alpha 
         << " _adjust_period_threshold=" << _adjust_period_threshold
         << " _adjust_bytes_threshold=" << _adjust_bytes_threshold
+        << " _ecn_low=" << _ecn_low
+        << " _ecn_high=" << _ecn_high
         << endl;
 }
 
@@ -1338,6 +1347,7 @@ void UecSrc::multiplicative_decrease() {
     simtime_picosec avg_delay = _nscc_fastcn ? get_fastcn_avg_delay() : get_avg_delay();
     // simtime_picosec avg_delay = get_avg_delay();
     if (avg_delay > _target_Qdelay){
+        // if (eventlist().now() - _last_dec_time > 0){
         if (eventlist().now() - _last_dec_time > _base_rtt){
             mem_b before = _cwnd;
             double md_factor = max(1-_gamma*(avg_delay-_target_Qdelay)/avg_delay, 0.5);/*_max_md_jump instead of 1*/
@@ -1351,6 +1361,33 @@ void UecSrc::multiplicative_decrease() {
                      << " MULTI_DEC " << before << "->" << _cwnd
                      << " avg_delay=" << timeAsUs(avg_delay) << " md_factor=" << md_factor 
                      << " fastcn=" << _nscc_fastcn << endl;
+            }
+            _last_dec_time = eventlist().now();
+        }
+    }
+}
+
+void UecSrc::multiplicative_decrease_with_cdelay(simtime_picosec target_Cdelay) {
+    _increase = false;
+    _fi_count = 0;
+    // NSCC fastcn模式使用独立的fastcn_avg_delay
+    simtime_picosec avg_delay = _nscc_fastcn ? get_fastcn_avg_delay() : get_avg_delay();
+    // simtime_picosec avg_delay = get_avg_delay();
+    if (avg_delay > target_Cdelay){
+        // if (eventlist().now() - _last_dec_time > 0){
+        if (eventlist().now() - _last_dec_time > _base_rtt){
+            mem_b before = _cwnd;
+            double md_factor = max(1-_gamma*(avg_delay-target_Cdelay)/avg_delay, 0.5);/*_max_md_jump instead of 1*/
+            _cwnd *= md_factor;
+            _cwnd = max(_cwnd, _min_cwnd);
+            _nscc_overall_stats.dec_multi_bytes += before - _cwnd;
+            _nscc_fulfill_stats.dec_multi_bytes += before - _cwnd;
+            // NSCC: 记录乘性减少（使用自定义target_Cdelay）
+            if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+                cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                     << " MULTI_DEC_C " << before << "->" << _cwnd
+                     << " avg_delay=" << timeAsUs(avg_delay) << " md_factor=" << md_factor 
+                     << " fastcn=" << _nscc_fastcn << " target_Cdelay=" << timeAsUs(target_Cdelay) << endl;
             }
             _last_dec_time = eventlist().now();
         }
@@ -1542,6 +1579,14 @@ void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
     double delay_seconds = queue_size_bits / (double)_network_linkspeed;
     delay = timeFromSec(delay_seconds);
     
+    // 计算 target_Cdelay：ECN下水线除以带宽 + 基础RTT
+    // target_Cdelay = _ecn_low / _network_linkspeed（转换为秒）+ _base_rtt
+    // _ecn_low 是字节，_network_linkspeed 是比特/秒
+    // 需要转换为：秒 = (字节 * 8) / (比特/秒)
+    double ecn_low_bits = (double)_ecn_low * 8.0;
+    double cdelay_seconds = ecn_low_bits / (double)_network_linkspeed;
+    simtime_picosec target_Cdelay = timeFromSec(cdelay_seconds) + _base_rtt * 0.5;
+    
     if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
         cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
              << " NSCC ECN_NOTIFY"
@@ -1549,7 +1594,10 @@ void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
              << " queue_size_high=" << pkt.queue_size_high()
              << " delay=" << timeAsUs(delay)
              << " target_Qdelay=" << timeAsUs(_target_Qdelay)
-             << " ecn_tag=" << pkt.ecn_tag() << endl;
+             << " target_Cdelay=" << timeAsUs(target_Cdelay)
+             << " ecn_tag=" << pkt.ecn_tag() 
+             << " _ecn_low=" << _ecn_low
+             << " _network_linkspeed=" << _network_linkspeed << endl;
     }
     
     // NSCC快速拥塞响应：基于 delay 和 ecn_tag 进行窗口调整
@@ -1557,10 +1605,10 @@ void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
         update_fastcn_delay(delay + _base_rtt, true, true);
         // 与ACK路径逻辑保持一致：ECN标记被设置且延迟高时乘性减窗
 
-        if (pkt.ecn_tag() && delay >= _target_Qdelay) {
-            multiplicative_decrease();
+        if (pkt.ecn_tag() && delay >= target_Cdelay) {
+            multiplicative_decrease_with_cdelay(target_Cdelay);
             if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
-                cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " multiplicative_decrease _nscc_cwnd " << _cwnd << endl;
+                cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " multiplicative_decrease_with_cdelay _nscc_cwnd " << _cwnd << endl;
             }
         }
     }

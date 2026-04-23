@@ -18,6 +18,7 @@
         "-log", "cwnd",
         "-end", "0",
         "-q", "43",
+        "-enable_accurate_base_rtt",
         "-ecn", "9 34"
       ],
       "output": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc.txt",
@@ -42,6 +43,7 @@
         "-log", "cwnd",
         "-end", "0",
         "-q", "43",
+        "-enable_accurate_base_rtt",
         "-ecn", "9 34"
       ],
       "output": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc_enable_fastcn.txt",
@@ -68,6 +70,7 @@
         "-log", "cwnd",
         "-end", "0",
         "-q", "43",
+        "-enable_accurate_base_rtt",
         "-ecn", "9 34"
       ],
       "output": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_enqueue.txt",
@@ -91,6 +94,7 @@
         "-queue_type", "composite",
         "-linkspeed", "100000",
         "-log", "cwnd",
+        "-enable_accurate_base_rtt",
         "-end", "0",
         "-q", "43",
         "-ecn", "9 34"

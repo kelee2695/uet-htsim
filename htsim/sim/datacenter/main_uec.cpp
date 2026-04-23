@@ -831,7 +831,7 @@ int main(int argc, char **argv) {
     if (sender_driven) {
         // UecSrc::parameterScaleToTargetQ();
         bool trimming_enabled = !disable_trim;
-        UecSrc::initNsccParams(network_max_unloaded_rtt, linkspeed, target_Qdelay, qa_gate, trimming_enabled);
+        UecSrc::initNsccParams(network_max_unloaded_rtt, linkspeed, target_Qdelay, qa_gate, trimming_enabled, ecn_low, ecn_high);
     }
 
     vector<unique_ptr<UecPullPacer>> pacers;

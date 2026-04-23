@@ -135,7 +135,8 @@ public:
      */
     static void initNsccParams(simtime_picosec network_rtt, linkspeed_bps linkspeed, 
                                simtime_picosec target_Qdelay, int8_t qa_gate,
-                               bool trimming_enabled);
+                               bool trimming_enabled,
+                               uint64_t ecn_low = 0, uint64_t ecn_high = 0);
     /**
      * Initialize per-connection NSCC parameters.
      */
@@ -392,6 +393,8 @@ public:
     static double _z_incast_n;      // N值，从命令行输入
     // NSCC parameters
     static bool _nscc_fastcn;       // 开启NSCC快速拥塞响应
+    static uint64_t _ecn_low;       // ECN低阈值（字节）
+    static uint64_t _ecn_high;      // ECN高阈值（字节）
     //debug
     static flowid_t _debug_flowid;
 private:
@@ -401,6 +404,7 @@ private:
     void fast_increase(uint32_t newly_acked_bytes,simtime_picosec delay);
     // void fair_decrease(bool can_decrease, uint32_t newly_acked_bytes);
     void multiplicative_decrease();
+    void multiplicative_decrease_with_cdelay(simtime_picosec target_Cdelay);
     void fulfill_adjustment();
     void mark_packet_for_retransmission(UecBasePacket::seq_t psn, uint16_t pktsize);
     void update_delay(simtime_picosec delay, bool update_avg, bool skip);
