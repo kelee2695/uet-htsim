@@ -1,129 +1,176 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-解析 cwnd_events.txt，将三个流的窗口操作分成三个表
+解析cwnd事件文件，生成每个流的拥塞窗口变化CSV和PNG图表
 """
 
 import re
-import sys
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # 非交互式后端
+import matplotlib.pyplot as plt
+import numpy as np
 import os
+import sys
+import argparse
 from collections import defaultdict
 
+
 def parse_cwnd_events(filename):
-    """解析窗口事件文件"""
-    
-    # 存储每个流的事件
-    flow_events = defaultdict(list)
-    
-    # 正则表达式匹配事件行
-    # 格式: [NSCC] t=0.000000 flow=1000000001 INIT 207500->240426
-    pattern = r'\[(\w+)\]\s+t=([\d.]+)\s+flow=(\d+)\s+(\w+)\s+(\d+)->(\d+)'
-    
+    """解析cwnd事件文件"""
+    events = defaultdict(list)
+
     with open(filename, 'r') as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            
-            match = re.match(pattern, line)
-            if match:
-                algo, time, flow_id, op_type, cwnd_before, cwnd_after = match.groups()
-                flow_id = int(flow_id)
-                
-                event = {
-                    'time': float(time),
-                    'algo': algo,
-                    'op_type': op_type,
-                    'cwnd_before': int(cwnd_before),
-                    'cwnd_after': int(cwnd_after),
-                    'change': int(cwnd_after) - int(cwnd_before)
-                }
-                flow_events[flow_id].append(event)
-    
-    return flow_events
 
-def write_flow_csv(flow_id, events, flow_name, output_dir):
-    """将单个流的窗口操作表写入 CSV 文件"""
-    
-    # 操作类型到中文的映射
-    op_type_names = {
-        'INIT': '初始化',
-        'BOUNDS_MAX': '上限约束',
-        'BOUNDS_MIN': '下限约束',
-        'FULFILL_INC': '累积增加',
-        'NACK_DEC': 'NACK减少',
-        'FAST_INC': '快速增加',
-        'ETA_INC': '保底增加',
-        'MULTI_DEC': '乘性减少',
-        'QUICK_ADAPT': '快速适应'
-    }
-    
-    # CSV 文件路径
-    csv_filename = os.path.join(output_dir, f"{flow_name}_cwnd_events.csv")
-    
-    with open(csv_filename, 'w', encoding='utf-8') as csv_file:
-        # 写入 CSV 表头
-        csv_file.write("序号,时间(us),操作类型,操作中文,窗口前,窗口后,变化量\n")
-        
-        # 写入数据行
-        for i, event in enumerate(events, 1):
-            op_name = op_type_names.get(event['op_type'], event['op_type'])
-            csv_file.write(f"{i},{event['time']:.3f},{event['op_type']},{op_name},"
-                          f"{event['cwnd_before']},{event['cwnd_after']},{event['change']}\n")
-    
-    print(f"  {flow_name}: {len(events)} 个事件 -> {csv_filename}")
-    return csv_filename
+            # 解析事件行
+            # 格式: <timestamp> <event_type> <node_id> <flow_id> <cwnd>
+            parts = line.split()
+            if len(parts) < 5:
+                print(f"警告: 第{line_num}行格式不正确，跳过")
+                continue
+
+            try:
+                timestamp = float(parts[0])
+                event_type = parts[1]
+                node_id = int(parts[2])
+                flow_id = parts[3]
+                cwnd = int(parts[4])
+
+                events[flow_id].append({
+                    'timestamp': timestamp,
+                    'event_type': event_type,
+                    'node_id': node_id,
+                    'cwnd': cwnd
+                })
+            except ValueError as e:
+                print(f"警告: 第{line_num}行解析错误: {e}")
+                continue
+
+    return events
+
+
+def create_cwnd_csv(flow_id, events_list, output_dir):
+    """为单个流生成cwnd变化CSV"""
+    if not events_list:
+        return None
+
+    # 按时间排序
+    sorted_events = sorted(events_list, key=lambda x: x['timestamp'])
+
+    # 准备数据
+    data = []
+    for event in sorted_events:
+        data.append({
+            'timestamp': event['timestamp'],
+            'event_type': event['event_type'],
+            'node_id': event['node_id'],
+            'cwnd': event['cwnd']
+        })
+
+    # 创建DataFrame并保存
+    df = pd.DataFrame(data)
+    csv_path = os.path.join(output_dir, f'cwnd_flow_{flow_id}.csv')
+    df.to_csv(csv_path, index=False)
+    return csv_path
+
+
+def plot_cwnd_curve(flow_id, events_list, output_dir):
+    """绘制单个流的cwnd变化曲线"""
+    if not events_list or len(events_list) < 2:
+        return None
+
+    # 按时间排序
+    sorted_events = sorted(events_list, key=lambda x: x['timestamp'])
+
+    # 提取数据
+    timestamps = [e['timestamp'] for e in sorted_events]
+    cwnds = [e['cwnd'] for e in sorted_events]
+
+    # 创建图表
+    plt.figure(figsize=(12, 6))
+    plt.plot(timestamps, cwnds, marker='o', linewidth=2, markersize=4)
+    plt.xlabel('Time')
+    plt.ylabel('CWND')
+    plt.title(f'CWND vs Time - Flow {flow_id}')
+    plt.grid(True, alpha=0.3)
+
+    # 保存图表
+    png_path = os.path.join(output_dir, f'cwnd_flow_{flow_id}.png')
+    plt.savefig(png_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    return png_path
+
 
 def main():
-    if len(sys.argv) < 2:
-        filename = "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result_test/nscc/cwnd_events.txt"
-    else:
-        filename = sys.argv[1]
-    
-    # 生成输出文件名
-    base_name = os.path.splitext(filename)[0]
-    output_filename = f"{base_name}_parsed.txt"
-    
-    print(f"解析文件: {filename}")
-    print(f"输出文件: {output_filename}")
-    
-    # 解析事件
-    flow_events = parse_cwnd_events(filename)
-    
-    # 流ID到名称的映射（根据connection matrix）
-    flow_names = {
-        1000000001: "Uec_0_2",
-        1000000003: "Uec_1_10", 
-        1000000005: "Uec_9_10"
-    }
-    
-    # 创建输出目录
-    output_dir = os.path.dirname(filename)
-    
-    print(f"生成 CSV 文件:")
-    csv_files = []
-    
-    # 按流ID排序，为每个流生成一个 CSV 文件
-    for flow_id in sorted(flow_events.keys()):
-        events = flow_events[flow_id]
-        flow_name = flow_names.get(flow_id, f"Unknown_{flow_id}")
-        csv_file = write_flow_csv(flow_id, events, flow_name, output_dir)
-        csv_files.append(csv_file)
-    
-    # 生成汇总统计 CSV
-    summary_filename = os.path.join(output_dir, "cwnd_events_summary.csv")
-    with open(summary_filename, 'w', encoding='utf-8') as summary_file:
-        summary_file.write("流名称,Flow ID,事件总数\n")
-        total_events = 0
-        for flow_id in sorted(flow_events.keys()):
-            flow_name = flow_names.get(flow_id, f"Unknown_{flow_id}")
-            event_count = len(flow_events[flow_id])
-            total_events += event_count
-            summary_file.write(f"{flow_name},{flow_id},{event_count}\n")
-        summary_file.write(f"总计,ALL,{total_events}\n")
-    
-    print(f"\n汇总统计: {summary_filename}")
-    print(f"解析完成，共生成 {len(csv_files) + 1} 个 CSV 文件")
+    parser = argparse.ArgumentParser(
+        description='解析cwnd事件文件，生成每个流的拥塞窗口变化CSV和PNG图表',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+示例:
+  %(prog)s /path/to/cwnd_events.txt -o /path/to/output
+  %(prog)s ./cwnd_events.txt
+        '''
+    )
+    parser.add_argument('input_file', nargs='?',
+                        help='cwnd事件文件路径')
+    parser.add_argument('-i', '--input', dest='input_file_opt',
+                        help='cwnd事件文件路径（与位置参数二选一）')
+    parser.add_argument('-o', '--output', default='./cwnd_output',
+                        help='输出目录路径 (默认: ./cwnd_output)')
+    parser.add_argument('--no-png', action='store_true',
+                        help='不生成PNG图表')
 
-if __name__ == "__main__":
+    args = parser.parse_args()
+
+    # 确定输入文件
+    input_file = args.input_file_opt or args.input_file
+    if not input_file:
+        parser.error("必须提供输入文件，使用 -i 或位置参数")
+
+    # 检查文件是否存在
+    if not os.path.exists(input_file):
+        print(f"错误: 文件不存在: {input_file}")
+        sys.exit(1)
+
+    # 创建输出目录
+    output_dir = args.output
+    os.makedirs(output_dir, exist_ok=True)
+
+    print(f"解析文件: {input_file}")
+    print(f"输出目录: {output_dir}")
+    print()
+
+    # 解析事件
+    events = parse_cwnd_events(input_file)
+
+    print(f"共解析到 {len(events)} 个流的事件")
+    print()
+
+    # 为每个流生成CSV和PNG
+    csv_count = 0
+    png_count = 0
+    for flow_id, events_list in events.items():
+        # 生成CSV
+        csv_path = create_cwnd_csv(flow_id, events_list, output_dir)
+        if csv_path:
+            csv_count += 1
+            print(f"生成CSV: {csv_path}")
+
+        # 生成PNG
+        if not args.no_png:
+            png_path = plot_cwnd_curve(flow_id, events_list, output_dir)
+            if png_path:
+                png_count += 1
+                print(f"生成PNG: {png_path}")
+
+    print()
+    print(f"完成!")
+    print(f"生成了 {csv_count} 个CSV文件, {png_count} 个PNG图表")
+    print(f"输出目录: {output_dir}")
+
+
+if __name__ == '__main__':
     main()

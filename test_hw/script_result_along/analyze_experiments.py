@@ -308,15 +308,26 @@ def analyze_experiments(result_dir, output_dir='./figures/'):
     print("=" * 80)
 
 def main():
-    # 设置默认路径
-    result_dir = '/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/result'
-    output_dir = '/home/lrh/uet-htsim/test_hw/2spine_4leaf_256/figures'
-    
-    # 解析命令行参数
-    if len(sys.argv) > 1:
-        result_dir = sys.argv[1]
-    if len(sys.argv) > 2:
-        output_dir = sys.argv[2]
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='HTSIM实验结果分析工具',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  %(prog)s /path/to/result /path/to/output
+  %(prog)s ./result ./figures
+        """
+    )
+    parser.add_argument('result_dir', nargs='?', default='./result',
+                        help='结果目录路径 (默认: ./result)')
+    parser.add_argument('output_dir', nargs='?', default='./figures',
+                        help='输出目录路径 (默认: ./figures)')
+
+    args = parser.parse_args()
+
+    result_dir = args.result_dir
+    output_dir = args.output_dir
     
     print("=" * 80)
     print("实验结果分析工具")

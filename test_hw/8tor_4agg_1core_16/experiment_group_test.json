@@ -2,10 +2,10 @@
   "experiments": [
     {
       "name": "nscc",
-      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "command": "/home/server/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
-        "-topo", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
+        "-tm", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
+        "-topo", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
         "-debug",
         "-log", "nic",
         "-log", "tor_downqueue",
@@ -21,15 +21,15 @@
         "-enable_accurate_base_rtt",
         "-ecn", "9 34"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc.log"
+      "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc.txt",
+      "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc.log"
     },
     {
       "name": "nscc_enable_fastcn",
-      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "command": "/home/server/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
-        "-topo", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
+        "-tm", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
+        "-topo", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
         "-debug",
         "-log", "nic",
         "-log", "tor_downqueue",
@@ -46,15 +46,15 @@
         "-enable_accurate_base_rtt",
         "-ecn", "9 34"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc_enable_fastcn.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc_enable_fastcn.log"
+      "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc_enable_fastcn.txt",
+      "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc_enable_fastcn.log"
     },
     {
       "name": "fastcn_nscc_enable_fastcn_enqueue",
-      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "command": "/home/server/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
-        "-topo", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
+        "-tm", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
+        "-topo", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
         "-debug",
         "-log", "nic",
         "-log", "tor_downqueue",
@@ -73,15 +73,15 @@
         "-enable_accurate_base_rtt",
         "-ecn", "9 34"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_enqueue.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_enqueue.log"
+      "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_enqueue.txt",
+      "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_enqueue.log"
     },
     {
       "name": "fastcn_nscc_enable_fastcn_dequeue",
-      "command": "/home/lrh/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
+      "command": "/home/server/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
-        "-tm", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
-        "-topo", "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
+        "-tm", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
+        "-topo", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo", 
         "-debug",
         "-log", "nic",
         "-log", "tor_downqueue",
@@ -99,8 +99,8 @@
         "-q", "43",
         "-ecn", "9 34"
       ],
-      "output": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_dequeue.txt",
-      "log": "/home/lrh/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_dequeue.log"
+      "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_dequeue.txt",
+      "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_dequeue.log"
     }
   ]
 }
