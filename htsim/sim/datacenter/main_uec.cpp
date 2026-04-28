@@ -229,6 +229,7 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i],"-nscc_fastcn")) {
             UecSrc::_nscc_fastcn = true;
+            CompositeQueue::setNsccFastcn(true);
             cout << "NSCC fast congestion response enabled" << endl;
         } else if (!strcmp(argv[i],"-sender_cc")) {
             UecSrc::_sender_based_cc = true;

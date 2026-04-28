@@ -18,6 +18,9 @@ bool CompositeQueue::_enable_ecn_notify = false;
 // Static ECN marking timing control - default dequeue (false)
 bool CompositeQueue::_ecn_mark_on_enqueue = false;
 
+// Static NSCC fastcn mode control - default disabled
+bool CompositeQueue::_nscc_fastcn = false;
+
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, 
                                QueueLogger* logger, uint16_t trim_size, bool disable_trim)
     : Queue(bitrate, maxsize, eventlist, logger)
@@ -97,17 +100,28 @@ void CompositeQueue::beginService(){
     }
 }
 
-bool CompositeQueue::decide_ECN() {
+int CompositeQueue::decide_ECN() {
     //ECN mark on deque
     if (_queuesize_low > _ecn_maxthresh) {
-        return true;
+        return ECN_MARK;
     } else if (_queuesize_low > _ecn_minthresh) {
         uint64_t p = (0x7FFFFFFF * (_queuesize_low - _ecn_minthresh))/(_ecn_maxthresh - _ecn_minthresh);
         if ((uint64_t)random() < p) {
-            return true;
+            return ECN_MARK;
         }
+    } else if (_nscc_fastcn && _queuesize_low > 0) {
+        // NSCC fastcn 模式：队列深度在 0 和 _ecn_minthresh 之间
+        // 概率标记：越接近 0，标记概率越高
+        uint64_t p = (0x7FFFFFFF * (_ecn_minthresh - _queuesize_low)) / _ecn_minthresh;
+        // 限制最大概率为 25%
+        p = p;
+        if ((uint64_t)random() < p) {
+            return ECN_LOW_WATERMARK;
+        }
+        // random();
     }
-    return false;
+    // random();
+    return ECN_NO_MARK;
 }
 
 void CompositeQueue::completeService(){
@@ -203,20 +217,20 @@ void CompositeQueue::mark_ECN(Packet& pkt, bool on_enqueue) {
     }
 
     // 使用 decide_ECN 函数判断是否需要标记 ECN
-    bool ecn = decide_ECN();
-    
-    if (ecn) {
+    int ecn_decision = decide_ECN();
+
+    if (ecn_decision == ECN_MARK) {
         uint32_t old_flags = pkt.flags();
         bool already_marked = (old_flags & _ecn_tag) == _ecn_tag;
-        
+
         pkt.set_flags(old_flags | _ecn_tag);
-        
+
         // 只在启用 ECN notify 回传时才发送通知包
         if (_enable_ecn_notify && !already_marked && pkt.type() == UECDATA) {
             UecDataPacket* uec_pkt = static_cast<UecDataPacket*>(&pkt);
             uint32_t ecn_notify_dst = uec_pkt->get_src();
             uint32_t ecn_notify_flow_id = uec_pkt->get_sink_flow_id();
-            
+
             if (ecn_notify_dst != UINT32_MAX && ecn_notify_flow_id != 0) {
                 double we_w_ratio = (_w > 0) ? (_we / _w) : 0;
                 mem_b queue_capacity = maxsize();
@@ -230,7 +244,43 @@ void CompositeQueue::mark_ECN(Packet& pkt, bool on_enqueue) {
                     queue_capacity  // Pass the queue capacity
                 );
                 _switch->receivePacket(*ecn_notify);
-                
+
+                const char* timing_str = on_enqueue ? "On Enqueue" : "On Dequeue";
+                cout << "[ECN Notify " << timing_str << "] queue_id=" << _queue_id
+                    << " _queuesize_low=" << _queuesize_low
+                    << " _queuesize_high=" << _queuesize_high
+                    << " ecn_tag=" << _ecn_tag
+                    << " w=" << _w
+                    << " we=" << _we
+                    << " we_w_ratio=" << we_w_ratio
+                    << " cnp_psn=" << uec_pkt->epsn()
+                    << " dq_dt=" << getDqDt()  // Pass the queue depth change rate
+                    << endl;
+            }
+        }
+    } else if (_nscc_fastcn && ecn_decision == ECN_LOW_WATERMARK) {
+        // 低于 low 水线的特殊处理（如需要）
+        // 当前不执行任何操作
+        // 只在启用 ECN notify 回传时才发送通知包
+        if (_enable_ecn_notify && pkt.type() == UECDATA) {
+            UecDataPacket* uec_pkt = static_cast<UecDataPacket*>(&pkt);
+            uint32_t ecn_notify_dst = uec_pkt->get_src();
+            uint32_t ecn_notify_flow_id = uec_pkt->get_sink_flow_id();
+
+            if (ecn_notify_dst != UINT32_MAX && ecn_notify_flow_id != 0) {
+                double we_w_ratio = (_w > 0) ? (_we / _w) : 0;
+                mem_b queue_capacity = maxsize();
+                UecEcnNotifyPacket* ecn_notify = UecEcnNotifyPacket::newpkt(
+                    pkt.flow(), ecn_notify_dst,
+                    ecn_notify_flow_id, pkt.pathid(),
+                    _queuesize_low, _queuesize_high, _ecn_tag,
+                    we_w_ratio,
+                    uec_pkt->epsn(),  // Pass the PSN of the packet that triggered CNP
+                    getDqDt(),  // Pass the queue depth change rate
+                    queue_capacity  // Pass the queue capacity
+                );
+                _switch->receivePacket(*ecn_notify);
+
                 const char* timing_str = on_enqueue ? "On Enqueue" : "On Dequeue";
                 cout << "[ECN Notify " << timing_str << "] queue_id=" << _queue_id
                     << " _queuesize_low=" << _queuesize_low

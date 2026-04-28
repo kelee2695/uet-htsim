@@ -1377,6 +1377,10 @@ void UecSrc::multiplicative_decrease_with_cdelay(simtime_picosec target_Cdelay, 
         if (eventlist().now() - _last_dec_time > 0){
         // if (eventlist().now() - _last_dec_time > _base_rtt){
             mem_b before = _cwnd;
+            if (before < queue_capacity_per_incast)
+            {
+                return;
+            }
             double md_factor = max(1-_gamma * (avg_delay-target_Cdelay * 1)/avg_delay, 0.5);/*_max_md_jump instead of 1*/
             // _cwnd *= md_factor;
             _cwnd = queue_capacity_per_incast;
@@ -1392,6 +1396,20 @@ void UecSrc::multiplicative_decrease_with_cdelay(simtime_picosec target_Cdelay, 
             }
             _last_dec_time = eventlist().now();
         }
+    }
+}
+
+void UecSrc::additive_increase_on_ecn_notify() {
+    // 在ECN notify时进行加性增窗（用于轻负载场景）
+    mem_b before = _cwnd;
+    _cwnd += _mss * 2;  // 增加一个MSS
+    _cwnd = min(_cwnd, _maxwnd);  // 不超过最大窗口
+
+    // NSCC: 记录ECN notify加性增窗
+    if (_enable_cwnd_log && _sender_cc_algo == NSCC) {
+        cout << "[NSCC-CWND] " << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+             << " ECN_NOTIFY_INC " << before << "->" << _cwnd
+             << " mss=" << _mss << endl;
     }
 }
 
@@ -1573,6 +1591,31 @@ void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
     // 从ECN Notify包中获取队列深度（字节）
     mem_b queue_size = pkt.queue_size_low();
 
+    // 判断队列深度与ECN low水线的关系
+    if (queue_size < _ecn_low) {
+        // 队列深度小于ECN low水线：网络负载较轻，进行一次加性增窗
+        if (_flow.flow_id() == _debug_flowid || UecSrc::_debug) {
+            cout << timeAsUs(eventlist().now()) << " flowid " << _flow.flow_id()
+                 << " NSCC ECN_NOTIFY (queue < ecn_low)"
+                 << " queue_size_low=" << queue_size
+                 << " _ecn_low=" << _ecn_low
+                 << " additive increase mode" << endl;
+        }
+        
+        // NSCC快速拥塞响应模式下：轻负载时进行加性增窗
+        if (_nscc_fastcn) {
+            // 进行一次加性增窗
+            additive_increase_on_ecn_notify();
+            
+            // 同时更新延迟统计
+            double queue_size_bits = queue_size * 8.0;
+            double delay_seconds = queue_size_bits / (double)_network_linkspeed;
+            delay = timeFromSec(delay_seconds);
+            update_fastcn_delay(delay + _base_rtt, true, true);
+        }
+        return;
+    }
+
     double dq_dt = pkt.dq_dt();
     mem_b queue_capacity = pkt.queue_capacity();
 
@@ -1584,8 +1627,8 @@ void UecSrc::processEcnNotify_NSCC(const UecEcnNotifyPacket& pkt) {
     if (_network_linkspeed > 0) {
         if(dq_dt <= 0)
             return;
-        // incast_num = (int)ceil(dq_dt * 8.0 / (double)_network_linkspeed);
-        incast_num = 3;
+        incast_num = (int)ceil(dq_dt * 8.0 / (double)_network_linkspeed);
+        // incast_num = 3;
     }
 
     mem_b queue_capacity_per_incast = queue_capacity / incast_num;

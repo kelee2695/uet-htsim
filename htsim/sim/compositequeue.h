@@ -10,6 +10,11 @@
 #define QUEUE_LOW 1
 #define QUEUE_HIGH 2
 
+// ECN decision return values
+#define ECN_NO_MARK 0       // 不打标记
+#define ECN_MARK 1          // 打ECN标记
+#define ECN_LOW_WATERMARK 2 // 低于low水线，特殊处理
+
 
 #include <list>
 #include "queue.h"
@@ -96,6 +101,10 @@ class CompositeQueue : public Queue {
     static void setEcnMarkOnEnqueue(bool on_enqueue) { _ecn_mark_on_enqueue = on_enqueue; }
     static bool getEcnMarkOnEnqueue() { return _ecn_mark_on_enqueue; }
 
+    // NSCC fastcn mode control
+    static void setNsccFastcn(bool enable) { _nscc_fastcn = enable; }
+    static bool getNsccFastcn() { return _nscc_fastcn; }
+
     int _num_packets;
     int _num_headers; // only includes data packets stripped to headers, not acks or nacks
     int _num_acks;
@@ -109,7 +118,7 @@ class CompositeQueue : public Queue {
     // Mechanism
     void beginService(); // start serving the item at the head of the queue
     void completeService(); // wrap up serving the item at the head of the queue
-    bool decide_ECN();
+    int decide_ECN();
     void mark_ECN(Packet& pkt, bool on_enqueue); // 处理 ECN 标记（根据时机参数决定行为）
 
     bool _disable_trim;
@@ -147,6 +156,9 @@ class CompositeQueue : public Queue {
 
     // Static ECN marking timing control - shared across all queues
     static bool _ecn_mark_on_enqueue;
+
+    // Static NSCC fastcn mode control - shared across all queues
+    static bool _nscc_fastcn;
 };
 
 #endif
