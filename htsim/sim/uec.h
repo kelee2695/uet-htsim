@@ -404,7 +404,7 @@ private:
     void fast_increase(uint32_t newly_acked_bytes,simtime_picosec delay);
     // void fair_decrease(bool can_decrease, uint32_t newly_acked_bytes);
     void multiplicative_decrease();
-    void multiplicative_decrease_with_cdelay(simtime_picosec target_Cdelay);
+    void multiplicative_decrease_with_cdelay(simtime_picosec target_Cdelay, mem_b queue_capacity_per_incast = 0);
     void fulfill_adjustment();
     void mark_packet_for_retransmission(UecBasePacket::seq_t psn, uint16_t pktsize);
     void update_delay(simtime_picosec delay, bool update_avg, bool skip);
@@ -440,6 +440,7 @@ private:
     uint32_t _inc_bytes = 0;
     simtime_picosec _avg_delay = 0;
     simtime_picosec _fastcn_avg_delay = 0;  // NSCC fastcn模式专用的平均延迟
+    bool _fastcn_delay_set_first = true;  // 标记是否第一次设置fastcn延迟
 
     simtime_picosec _last_eta_time = 0;
     simtime_picosec _last_adjust_time = 0;

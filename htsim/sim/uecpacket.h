@@ -386,12 +386,14 @@ public:
                                               uint32_t dst, flowid_t flow_id, uint32_t path_id,
                                               mem_b queue_size_low, mem_b queue_size_high, int ecn_tag,
                                               double we_w_ratio = 0.0,
-                                              seq_t cnp_psn = 0) {
+                                              seq_t cnp_psn = 0,
+                                              double dq_dt = 0.0,
+                                              mem_b queue_capacity = 0) {
         UecEcnNotifyPacket* p = _packetdb.allocPacket();
         p->set_attrs(flow, ACKSIZE, 0);
         // Note: No set_route() call here. ECN notification packets don't have a predefined route.
         // The switch will determine the route dynamically based on destination address.
-        
+
         p->_type = UEC_ECNNOTIFY;
         p->_is_header = true;
         p->_bounced = false;
@@ -406,6 +408,8 @@ public:
         p->_we_w_ratio = we_w_ratio;
         p->_ev = path_id;  // Store the data packet's path_id for congestion control
         p->_cnp_psn = cnp_psn;  // PSN of the packet that triggered CNP
+        p->_dq_dt = dq_dt;  // Queue depth change rate (bytes per second)
+        p->_queue_capacity = queue_capacity;  // Queue capacity (maxsize)
         return p;
     }
 
@@ -420,6 +424,8 @@ public:
     inline double we_w_ratio() const { return _we_w_ratio; }
     inline uint32_t ev() const { return _ev; }  // Return the data packet's path_id
     inline seq_t cnp_psn() const { return _cnp_psn; }  // Return the PSN of the packet that triggered CNP
+    inline double dq_dt() const { return _dq_dt; }  // Return the queue depth change rate
+    inline mem_b queue_capacity() const { return _queue_capacity; }  // Return the queue capacity
 
     virtual PktPriority priority() const { return Packet::PRIO_HI; }
 
@@ -433,6 +439,8 @@ protected:
     double _we_w_ratio;
     uint32_t _ev;  // Path ID of the data packet that triggered ECN (for congestion control)
     seq_t _cnp_psn;  // PSN of the data packet that triggered CNP
+    double _dq_dt;  // Queue depth change rate (bytes per second)
+    mem_b _queue_capacity;  // Queue capacity (maxsize)
     static PacketDB<UecEcnNotifyPacket> _packetdb;
 };
 

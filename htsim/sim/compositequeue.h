@@ -76,11 +76,13 @@ class CompositeQueue : public Queue {
 
     void set_ecn_tag(int ecn_tag) { _ecn_tag = ecn_tag; }
 
-    // Getters and setters for w and we (used by QueueStatsTimer)
+    // Getters and setters for w, we, and dq_dt (used by QueueStatsTimer)
     double getW() const { return _w; }
     double getWe() const { return _we; }
+    double getDqDt() const { return _dq_dt; }
     void setW(double w) { _w = w; }
     void setWe(double we) { _we = we; }
+    void setDqDt(double dq_dt) { _dq_dt = dq_dt; }
 
     // Static network RTT - shared across all queues
     static void setNetworkRtt(simtime_picosec rtt) { _network_rtt = rtt; }
@@ -132,6 +134,7 @@ class CompositeQueue : public Queue {
     // Statistics variables (updated by QueueStatsTimer)
     double _w;
     double _we;
+    double _dq_dt;
 
     // Pointer to the stats timer (owned by this queue)
     QueueStatsTimer* _stats_timer;

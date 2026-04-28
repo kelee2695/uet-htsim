@@ -48,6 +48,7 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
     // Initialize statistics variables
     _w = 0.0;
     _we = 0.0;
+    _dq_dt = 0.0;
 
     // Create the stats timer
     _stats_timer = new QueueStatsTimer(this, eventlist);
@@ -218,12 +219,15 @@ void CompositeQueue::mark_ECN(Packet& pkt, bool on_enqueue) {
             
             if (ecn_notify_dst != UINT32_MAX && ecn_notify_flow_id != 0) {
                 double we_w_ratio = (_w > 0) ? (_we / _w) : 0;
+                mem_b queue_capacity = maxsize();
                 UecEcnNotifyPacket* ecn_notify = UecEcnNotifyPacket::newpkt(
                     pkt.flow(), ecn_notify_dst,
                     ecn_notify_flow_id, pkt.pathid(),
                     _queuesize_low, _queuesize_high, _ecn_tag,
                     we_w_ratio,
-                    uec_pkt->epsn()  // Pass the PSN of the packet that triggered CNP
+                    uec_pkt->epsn(),  // Pass the PSN of the packet that triggered CNP
+                    getDqDt(),  // Pass the queue depth change rate
+                    queue_capacity  // Pass the queue capacity
                 );
                 _switch->receivePacket(*ecn_notify);
                 
@@ -236,6 +240,7 @@ void CompositeQueue::mark_ECN(Packet& pkt, bool on_enqueue) {
                     << " we=" << _we
                     << " we_w_ratio=" << we_w_ratio
                     << " cnp_psn=" << uec_pkt->epsn()
+                    << " dq_dt=" << getDqDt()  // Pass the queue depth change rate
                     << endl;
             }
         }
@@ -432,7 +437,7 @@ mem_b CompositeQueue::queuesize() const {
 QueueStatsTimer::QueueStatsTimer(CompositeQueue* queue, EventList& eventlist)
     : EventSource(eventlist, "QueueStatsTimer"), _queue(queue)
 {
-    _interval = 10000;  // 10 microseconds in picoseconds
+    _interval = 5000000;  // 5 microseconds in picoseconds
     _next_stats_time = eventlist.now() + _interval;
 
     // Initialize we to bandwidth * RTT (BDP) during construction
@@ -488,10 +493,14 @@ void QueueStatsTimer::doNextEvent()
     // Update the queue's w value
     _queue->setW(w);
 
+    // Update the queue's dq_dt value
+    _queue->setDqDt(dq_dt);
+
     // Update previous queue depth for next iteration
     _last_q_low = q_low;
 
     // Schedule next stats event
     _next_stats_time = now + _interval;
     eventlist().sourceIsPending(*this, _next_stats_time);
+    // cout << "time=" << now << " QueueStatsTimer::doNextEvent() w=" << w << " we=" << _queue->_we << " dq_dt=" << dq_dt << endl;
 }

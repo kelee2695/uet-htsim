@@ -1,12 +1,12 @@
-Nodes 16
+Nodes 64
 Tiers 3
-Podsize 4
+Podsize 16
 
 Tier 0
 Downlink_speed_Gbps 100
-Radix_Down 2
+Radix_Down 8
 Radix_Up 1
-Oversubscribed 2
+Oversubscribed 8
 Downlink_Latency_ns 50
 Switch_Latency_ns 100
 

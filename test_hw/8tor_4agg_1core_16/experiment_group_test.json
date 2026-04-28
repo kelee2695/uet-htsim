@@ -17,9 +17,9 @@
         "-linkspeed", "100000",
         "-log", "cwnd",
         "-end", "0",
-        "-q", "43",
+        "-q", "168",  
         "-enable_accurate_base_rtt",
-        "-ecn", "9 34"
+        "-ecn", "40 128"
       ],
       "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc.txt",
       "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc.log"
@@ -42,9 +42,9 @@
         "-linkspeed", "100000",
         "-log", "cwnd",
         "-end", "0",
-        "-q", "43",
+        "-q", "168",  
         "-enable_accurate_base_rtt",
-        "-ecn", "9 34"
+        "-ecn", "40 128"
       ],
       "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc_enable_fastcn.txt",
       "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_nscc_enable_fastcn.log"
@@ -69,9 +69,9 @@
         "-linkspeed", "100000",
         "-log", "cwnd",
         "-end", "0",
-        "-q", "43",
+        "-q", "168",  
         "-enable_accurate_base_rtt",
-        "-ecn", "9 34"
+        "-ecn", "40 128"
       ],
       "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_enqueue.txt",
       "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_enqueue.log"
@@ -81,7 +81,7 @@
       "command": "/home/server/uet-htsim/htsim/sim/build/datacenter/htsim_uec",
       "args": [
         "-tm", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/connection_matrics/test.cm",
-        "-topo", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo", 
+        "-topo", "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/8tor_4agg_1core_16.topo",
         "-debug",
         "-log", "nic",
         "-log", "tor_downqueue",
@@ -96,8 +96,8 @@
         "-log", "cwnd",
         "-enable_accurate_base_rtt",
         "-end", "0",
-        "-q", "43",
-        "-ecn", "9 34"
+        "-q", "168",  
+        "-ecn", "40 128"
       ],
       "output": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_dequeue.txt",
       "log": "/home/server/uet-htsim/test_hw/8tor_4agg_1core_16/result/result_fastcn_nscc_enable_fastcn_dequeue.log"
